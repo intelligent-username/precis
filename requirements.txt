@@ -1,1 +1,7 @@
 pytorch
+transformers
+accelerate
+bitsandbytes
+summarizer
+sentencepiece
+fastapi

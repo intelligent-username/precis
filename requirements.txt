@@ -1,7 +1,12 @@
-pytorch
+# Core ML
+torch
 transformers
 accelerate
 bitsandbytes
-summarizer
+peft
+datasets
 sentencepiece
+
+# API
 fastapi
+uvicorn

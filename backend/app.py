@@ -1,6 +1,7 @@
 """FastAPI backend for Précis."""
 
-from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -11,18 +12,30 @@ app = FastAPI(
     version="0.1.0"
 )
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-class SummarizeRequest(BaseModel):
-    """Request model for summarization."""
+
+
+class YouTubeRequest(BaseModel):
     url: str
     max_length: Optional[int] = 512
 
+class TranscriptRequest(BaseModel):
+    text: str
+    max_length: Optional[int] = 512
 
 class SummarizeResponse(BaseModel):
-    """Response model for summarization."""
-    url: str
     summary: str
     success: bool
+    source_type: str
+
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -72,30 +85,42 @@ async def status():
     }
 
 
-@app.post("/summarize", response_model=SummarizeResponse)
-async def summarize(request: SummarizeRequest):
-    """
-    Summarize content from a URL.
-    
-    Currently returns dummy data. Will be implemented with actual model.
-    """
-    # TODO: Implement actual summarization
-    # 1. Fetch content from URL
-    # 2. Parse text (YouTube transcript or article)
-    # 3. Run through model
-    # 4. Return summary
-    
-    dummy_summary = (
-        f"This is a placeholder summary for content at {request.url}. "
-        "The actual summarization model will be integrated in the next phase. "
-        "This summary respects the max_length parameter of {request.max_length} tokens."
-    )
-    
+@app.post("/summarize/youtube", response_model=SummarizeResponse)
+async def summarize_youtube(request: YouTubeRequest):
+    """Summarize a YouTube video from its URL."""
+    # TODO: Implement YT transcript extraction and summarization
     return SummarizeResponse(
-        url=request.url,
-        summary=dummy_summary,
-        success=True
+        summary=f"Summary for YouTube video at {request.url}. (Placeholder)",
+        success=True,
+        source_type="youtube"
     )
+
+@app.post("/summarize/transcript", response_model=SummarizeResponse)
+async def summarize_transcript(request: TranscriptRequest):
+    """Summarize a provided transcript or article text."""
+    # TODO: Implement summarization
+    return SummarizeResponse(
+        summary=f"Summary for provided text ({len(request.text)} chars). (Placeholder)",
+        success=True,
+        source_type="transcript"
+    )
+
+@app.post("/summarize/file", response_model=SummarizeResponse)
+async def summarize_file(file: UploadFile = File(...)):
+    """Summarize content from a .txt file."""
+    if not file.filename.endswith(".txt"):
+        raise HTTPException(status_code=400, detail="Only .txt files are supported")
+    
+    content = await file.read()
+    text = content.decode("utf-8")
+    
+    # TODO: Implement summarization
+    return SummarizeResponse(
+        summary=f"Summary for file {file.filename} ({len(text)} chars). (Placeholder)",
+        success=True,
+        source_type="file"
+    )
+
 
 
 if __name__ == "__main__":

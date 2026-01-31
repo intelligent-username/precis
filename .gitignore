@@ -1,2 +1,9 @@
+
+# Python Remainders
 **cache**
 *.ipynb
+.venv
+
+# Front end
+node_modules
+package-lock.json

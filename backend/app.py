@@ -6,7 +6,7 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
@@ -69,53 +69,84 @@ class SummarizeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _build_prompt(title: Optional[str], text: str) -> str:
-    header = f"Title: {title}\n" if title else ""
+    if title:
+        instructions = (
+            f'The article is titled "{title}". '
+            "If the title is a question, answer it directly in one sentence using only facts from the article. "
+            "If the title is not a question, write one sentence that gives a concise, high-level overview "
+            "of the article, briefly enumerating all key facts."
+        )
+    else:
+        instructions = (
+            "Write one sentence that gives a concise, high-level overview of the article, "
+            "briefly enumerating all key facts."
+        )
     return (
-        "Summarise the following article in 2–4 clear, factual sentences. "
-        "Do not add opinions or commentary.\n\n"
-        f"{header}"
+        f"{instructions}\n"
+        "Do not add opinions, commentary, or filler phrases like 'The article discusses'.\n"
+        "Output the summary sentence only — nothing else.\n\n"
         f"Article:\n{text}\n\n"
         "Summary:"
     )
 
 
-async def call_ollama(prompt: str, max_tokens: int = MAX_SUMMARY_TOKENS) -> str:
-    """Send a prompt to the local Ollama completions endpoint and return the text."""
-    payload = {
+def _ollama_payload(prompt: str, stream: bool = False) -> dict:
+    return {
         "model": MODEL_NAME,
         "prompt": prompt,
-        "max_tokens": max_tokens,
-        "temperature": TEMPERATURE,
-        "stop": ["\n\n", "Article:", "Title:"],  # prevent runaway generation
+        "stream": stream,
+        "options": {
+            "num_predict": MAX_SUMMARY_TOKENS,
+            "temperature": TEMPERATURE,
+            "stop": ["\n\n", "Article:", "Title:"],
+        },
     }
 
+
+def _ollama_connect_error() -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail="Cannot reach Ollama at 127.0.0.1:11434. Make sure `ollama serve` is running.",
+    )
+
+
+async def call_ollama(prompt: str) -> str:
+    """Non-streaming call — returns the full generated text."""
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
-            resp = await client.post(OLLAMA_COMPLETIONS_URL, json=payload)
+            resp = await client.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json=_ollama_payload(prompt, stream=False),
+            )
             resp.raise_for_status()
         except httpx.ConnectError:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Cannot reach Ollama at 127.0.0.1:11434. "
-                    "Make sure `ollama serve` is running."
-                ),
-            )
+            raise _ollama_connect_error()
         except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Ollama returned an error: {exc.response.text}",
-            )
+            raise HTTPException(status_code=502, detail=f"Ollama error: {exc.response.text}")
 
     data = resp.json()
     try:
-        return data["choices"][0]["text"].strip()
-    except (KeyError, IndexError) as exc:
+        return data["response"].strip()
+    except KeyError as exc:
         logger.error("Unexpected Ollama response: %s", data)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Unexpected response shape from Ollama: {exc}",
-        )
+        raise HTTPException(status_code=502, detail=f"Unexpected response shape: {exc}")
+
+
+async def stream_ollama(prompt: str):
+    """Async generator that yields raw NDJSON lines from Ollama's streaming endpoint."""
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            async with client.stream(
+                "POST",
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json=_ollama_payload(prompt, stream=True),
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if line:
+                        yield line + "\n"
+        except httpx.ConnectError:
+            raise _ollama_connect_error()
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +214,7 @@ async def status():
 
 @app.post("/summarize/transcript", response_model=SummarizeResponse)
 async def summarize_transcript(request: TranscriptRequest):
-    """Summarise a provided article or transcript."""
+    """Summarise a provided article or transcript (non-streaming)."""
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="text must not be empty")
 
@@ -191,6 +222,24 @@ async def summarize_transcript(request: TranscriptRequest):
     summary = await call_ollama(prompt)
 
     return SummarizeResponse(summary=summary, success=True, source_type="transcript")
+
+
+@app.post("/summarize/transcript/stream")
+async def summarize_transcript_stream(request: TranscriptRequest):
+    """
+    Streaming variant — pipes Ollama's NDJSON stream directly to the client.
+    Each line is a JSON object: {"response": "<token>", "done": false}.
+    """
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="text must not be empty")
+
+    prompt = _build_prompt(request.title, request.text)
+
+    return StreamingResponse(
+        stream_ollama(prompt),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},  # disable nginx buffering if behind a proxy
+    )
 
 
 @app.post("/summarize/file", response_model=SummarizeResponse)

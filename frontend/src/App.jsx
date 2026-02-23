@@ -2,8 +2,6 @@ import { useState, useRef } from 'react'
 import './App.css'
 
 const API_BASE = 'http://localhost:8000'
-const OLLAMA_URL = 'http://127.0.0.1:11434/v1/completions'
-const MODEL_NAME = 'phi4-mini:3.8b'
 
 function App() {
   const [activeTab, setActiveTab] = useState('youtube')
@@ -13,30 +11,58 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState(null)
   const [error, setError] = useState(null)
+  const [streamingText, setStreamingText] = useState('')
   const fileInputRef = useRef(null)
+  const abortRef = useRef(null)
 
-  const callOllama = async (text) => {
-    const prompt = `Summarise the following article in 2–4 clear, factual sentences. Do not add opinions or commentary.\n\nArticle:\n${text}\n\nSummary:`
+  /**
+   * Stream tokens from the backend's /summarize/transcript/stream endpoint.
+   * The backend owns the prompt — we just send the raw text and title.
+   */
+  const streamFromBackend = async (text, title) => {
+    abortRef.current = new AbortController()
 
-    const res = await fetch(OLLAMA_URL, {
+    const res = await fetch(`${API_BASE}/summarize/transcript/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        prompt,
-        max_tokens: 120,
-        temperature: 0.2,
-        stop: ['\n\n', 'Article:', 'Title:']
-      })
+      signal: abortRef.current.signal,
+      body: JSON.stringify({ text, title: title || null }),
     })
 
     if (!res.ok) {
       const body = await res.text()
-      throw new Error(`Ollama error (${res.status}): ${body}`)
+      throw new Error(`Backend error (${res.status}): ${body}`)
     }
 
-    const data = await res.json()
-    return data.choices[0].text.trim()
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let accumulated = ''
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          const chunk = JSON.parse(line)
+          if (chunk.response) {
+            accumulated += chunk.response
+            setStreamingText(accumulated)
+          }
+        } catch {
+          // skip malformed lines
+        }
+      }
+    }
+
+    return accumulated.trim()
   }
 
   const handleSubmit = async () => {
@@ -61,8 +87,9 @@ function App() {
         if (!transcript.trim()) {
           throw new Error('Please enter some text')
         }
-        const summary = await callOllama(transcript)
-        result = { summary, success: true, source_type: 'transcript', model: MODEL_NAME }
+        setStreamingText('')
+        const summary = await streamFromBackend(transcript, null)
+        result = { summary, success: true, source_type: 'transcript', model: 'phi4-mini:3.8b' }
       } else if (activeTab === 'file') {
         if (!selectedFile) {
           throw new Error('Please select a file')
@@ -183,8 +210,11 @@ function App() {
                       placeholder="Paste your article or transcript here..."
                       value={transcript}
                       onChange={(e) => setTranscript(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.ctrlKey && !loading) handleSubmit()
+                      }}
                     />
-                    <p className="form-hint">Paste any text content you want to summarize.</p>
+                    <p className="form-hint">Paste any text content you want to summarize. Press <kbd style={{ fontFamily: 'inherit', background: 'var(--color-canvas-inset)', border: '1px solid var(--color-border-muted)', borderRadius: 3, padding: '0 4px', fontSize: 11 }}>Ctrl</kbd> + <kbd style={{ fontFamily: 'inherit', background: 'var(--color-canvas-inset)', border: '1px solid var(--color-border-muted)', borderRadius: 3, padding: '0 4px', fontSize: 11 }}>Enter</kbd> to generate.</p>
                   </div>
 
                   {/* Inline result — only shown when this tab triggered it */}
@@ -195,9 +225,16 @@ function App() {
                     </div>
                   )}
                   {activeTab === 'transcript' && loading && (
-                    <div className="inline-result inline-result--loading fade-in">
-                      <span className="loading-spinner" style={{ width: 14, height: 14 }} />
-                      Generating summary…
+                    <div className="inline-result inline-result--streaming fade-in">
+                      <div className="inline-result__label">
+                        <span className="loading-spinner" style={{ width: 12, height: 12 }} />
+                        Generating…
+                        <span className="response-badge" style={{ marginLeft: 'auto' }}>phi4-mini:3.8b</span>
+                      </div>
+                      <p className="inline-result__text">
+                        {streamingText || <span className="streaming-placeholder">Waiting for model…</span>}
+                        <span className="streaming-cursor">▌</span>
+                      </p>
                     </div>
                   )}
                   {activeTab === 'transcript' && response && !loading && (

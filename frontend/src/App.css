@@ -299,6 +299,18 @@
   align-items: center;
 }
 
+.inline-result--streaming {
+  background-color: var(--color-canvas-inset);
+  border-color: var(--color-accent-emphasis);
+  color: var(--color-fg-default);
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.inline-result--streaming .inline-result__label {
+  color: var(--color-accent-fg);
+}
+
 .inline-result__label {
   display: flex;
   align-items: center;
@@ -315,4 +327,22 @@
   color: var(--color-fg-default);
   white-space: pre-wrap;
   margin: 0;
+}
+
+/* Streaming cursor blink */
+.streaming-cursor {
+  animation: blink 0.7s step-end infinite;
+  color: var(--color-accent-fg);
+  font-weight: 300;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.streaming-placeholder {
+  color: var(--color-fg-muted);
+  font-style: italic;
 }

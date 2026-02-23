@@ -2,6 +2,8 @@ import { useState, useRef } from 'react'
 import './App.css'
 
 const API_BASE = 'http://localhost:8000'
+const OLLAMA_URL = 'http://127.0.0.1:11434/v1/completions'
+const MODEL_NAME = 'phi4-mini:3.8b'
 
 function App() {
   const [activeTab, setActiveTab] = useState('youtube')
@@ -12,6 +14,30 @@ function App() {
   const [response, setResponse] = useState(null)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
+
+  const callOllama = async (text) => {
+    const prompt = `Summarise the following article in 2–4 clear, factual sentences. Do not add opinions or commentary.\n\nArticle:\n${text}\n\nSummary:`
+
+    const res = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        prompt,
+        max_tokens: 120,
+        temperature: 0.2,
+        stop: ['\n\n', 'Article:', 'Title:']
+      })
+    })
+
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`Ollama error (${res.status}): ${body}`)
+    }
+
+    const data = await res.json()
+    return data.choices[0].text.trim()
+  }
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -35,12 +61,8 @@ function App() {
         if (!transcript.trim()) {
           throw new Error('Please enter some text')
         }
-        const res = await fetch(`${API_BASE}/summarize/transcript`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: transcript })
-        })
-        result = await res.json()
+        const summary = await callOllama(transcript)
+        result = { summary, success: true, source_type: 'transcript', model: MODEL_NAME }
       } else if (activeTab === 'file') {
         if (!selectedFile) {
           throw new Error('Please select a file')
@@ -164,6 +186,30 @@ function App() {
                     />
                     <p className="form-hint">Paste any text content you want to summarize.</p>
                   </div>
+
+                  {/* Inline result — only shown when this tab triggered it */}
+                  {activeTab === 'transcript' && error && (
+                    <div className="inline-result inline-result--error fade-in">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                      {error}
+                    </div>
+                  )}
+                  {activeTab === 'transcript' && loading && (
+                    <div className="inline-result inline-result--loading fade-in">
+                      <span className="loading-spinner" style={{ width: 14, height: 14 }} />
+                      Generating summary…
+                    </div>
+                  )}
+                  {activeTab === 'transcript' && response && !loading && (
+                    <div className="inline-result inline-result--success fade-in">
+                      <div className="inline-result__label">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                        Summary
+                        <span className="response-badge" style={{ marginLeft: 'auto' }}>{response.model ?? 'phi4-mini'}</span>
+                      </div>
+                      <p className="inline-result__text">{response.summary}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* File Tab */}
@@ -248,8 +294,8 @@ function App() {
               </div>
             </div>
 
-            {/* Error display */}
-            {error && (
+            {/* Error display — for YouTube / File tabs only (transcript shows inline) */}
+            {error && activeTab !== 'transcript' && (
               <div className="response-section fade-in">
                 <div className="response-card" style={{ borderColor: 'var(--color-danger-fg)' }}>
                   <div className="response-header" style={{ borderColor: 'var(--color-danger-fg)' }}>
@@ -269,8 +315,8 @@ function App() {
               </div>
             )}
 
-            {/* Response display */}
-            {response && (
+            {/* Response display — for YouTube / File tabs only (transcript shows inline) */}
+            {response && activeTab !== 'transcript' && (
               <div className="response-section fade-in">
                 <div className="response-card">
                   <div className="response-header">

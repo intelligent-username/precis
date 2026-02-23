@@ -263,3 +263,56 @@
 .footer a:hover {
   text-decoration: underline;
 }
+
+/* ── Inline result (transcript tab) ─────────────────────────────────────── */
+.inline-result {
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-1);
+  font-size: 13px;
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+  border: 1px solid transparent;
+}
+
+.inline-result--success {
+  background-color: rgba(46, 160, 67, 0.08);
+  border-color: rgba(46, 160, 67, 0.3);
+  color: var(--color-fg-default);
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.inline-result--error {
+  background-color: rgba(248, 81, 73, 0.08);
+  border-color: rgba(248, 81, 73, 0.3);
+  color: var(--color-danger-fg);
+  align-items: center;
+}
+
+.inline-result--loading {
+  background-color: var(--color-canvas-inset);
+  border-color: var(--color-border-muted);
+  color: var(--color-fg-muted);
+  align-items: center;
+}
+
+.inline-result__label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(46, 160, 67, 0.9);
+  width: 100%;
+}
+
+.inline-result__text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-fg-default);
+  white-space: pre-wrap;
+  margin: 0;
+}

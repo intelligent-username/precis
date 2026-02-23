@@ -1,4 +1,4 @@
-# Core ML
+# Core ML (training pipeline — not needed to run the API)
 torch
 transformers
 accelerate
@@ -10,3 +10,5 @@ sentencepiece
 # API
 fastapi
 uvicorn
+httpx          # async HTTP client for Ollama calls
+python-multipart  # required by FastAPI for file uploads

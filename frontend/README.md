@@ -21,23 +21,13 @@ A GitHub-inspired dark theme frontend for the Précis content summarization API.
 npm install
 ```
 
-Or with Bun:
-
-```bash
-bun install
-```
-
 ### 2. Start the Development Server
 
 ```bash
 npm run dev
 ```
 
-Or with Bun:
-
-```bash
-bun run dev
-```
+(If you prefer a different m)
 
 The frontend will be available at [http://localhost:5173](http://localhost:5173).
 

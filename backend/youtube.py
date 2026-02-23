@@ -1,4 +1,6 @@
-"""YouTube transcript extraction."""
+"""
+YouTube transcript extraction.
+"""
 
 import re
 

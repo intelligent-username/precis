@@ -1,57 +1,12 @@
-# Frontend
+# Précis — Frontend
 
-A GitHub-inspired dark theme frontend for the Précis content summarization API.
+React 19 + Vite frontend for Précis. See the [root README](../README.md) for full setup instructions.
 
-## Features
-
-- **YouTube Video Summarization**: Paste a YouTube URL to summarize video content
-- **Article/Transcript Summarization**: Paste any text directly to summarize
-- **File Upload**: Drag and drop or browse for `.txt` files to summarize
-
-## Prerequisites
-
-- Node.js 18+ (or Bun)
-- The backend API running at `http://localhost:8000`
-
-## Getting Started
-
-### 1. Install Dependencies
+Navigate to the `frontend/` folder, then run:
 
 ```bash
 npm install
-```
-
-### 2. Start the Development Server
-
-```bash
 npm run dev
 ```
 
-(If you prefer a different m)
-
-The frontend will be available at [http://localhost:5173](http://localhost:5173).
-
-### 3. Start the Backend API (Required)
-
-In a separate terminal, navigate to the backend directory and run:
-
-```bash
-cd ../backend
-python -m uvicorn app:app --reload --host 0.0.0.0 --port 8000
-```
-
-## API Endpoints Used
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/summarize/youtube` | POST | Summarize YouTube video |
-| `/summarize/transcript` | POST | Summarize text content |
-| `/summarize/file` | POST | Summarize uploaded .txt file |
-
-## Build for Production
-
-```bash
-npm run build
-```
-
-The output will be in the `dist/` directory.
+Requires the backend API running at `http://localhost:5173`.

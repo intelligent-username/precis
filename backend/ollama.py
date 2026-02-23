@@ -1,5 +1,3 @@
-"""Ollama integration: prompt building, model validation, and streaming."""
-
 from typing import Optional
 
 import httpx

@@ -1,50 +1,69 @@
 # Précis
 
-A system for compressing long-form content into clear, structured summaries.
+A system for compressing long-form content into clear, structured summaries. Précis is designed for videos, articles, and papers. Paste a YouTube link, drop in an article, or upload a text file. Précis will pulls the key facts into a single sentence using a local LLM via [Ollama](https://ollama.com).
 
-Précis is designed for articles, papers, and video transcripts. The goal is to extract meaningful content rather than paraphrase main ideas.
+## Stack
 
-## Model
+| Layer    | Tech |
+|----------|------|
+| Frontend | React 19 + Vite |
+| Backend  | FastAPI (Python) |
+| LLM      | Ollama (phi4-mini, qwen-4b) |
 
-Qwen-2.5-7B-Instruct with 4-bit quantization (BitsAndBytes NF4) for efficiency. Fine-tuned using LoRA for summarization.
+## Setup
 
-## Installation
+### Prerequisites
 
-```bash
-pip install -r requirements.txt
-```
+- Python 3.11+
+- Node.js 18+ (or [Bun](https://bun.sh))
+- [Ollama](https://ollama.com) installed and running (`ollama serve`)
+- At least one model pulled: `ollama pull phi4-mini:latest`
 
-## Usage
+### Run the Fine-Tuning
 
-### Training (with dummy data)
+Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested phi4-mini (from Microsot) and Qwen 3-3b (from Alibaba).
 
-```bash
-# Dry run to validate pipeline
-python scripts/train.py --dry-run
-
-# Full training
-python scripts/train.py --epochs 3 --batch-size 4
-```
-
-### Evaluation
+### Backend
 
 ```bash
-python scripts/evaluate.py --checkpoint ./outputs
-```
-
-## API
-
-### Running the API
-
-```bash
-python app.py
-# or
+cd backend
+pip install fastapi uvicorn httpx python-multipart youtube-transcript-api
 uvicorn app:app --reload
 ```
 
-### Endpoints
+Runs on `http://localhost:8000`. Interactive docs at `/docs`.
 
-- `GET /` — API documentation page
-- `GET /health` — Health check
-- `GET /status` — Service status and model info
-- `POST /summarize` — Summarize content from URL (currently returns dummy data)
+### Frontend
+
+```bash
+cd frontend
+npm install   # or whatever replacement for npm you may be using
+npm run dev
+```
+
+Runs on `http://localhost:5173`.
+
+## Features
+
+- **YouTube summarization**: paste a URL, transcript is fetched automatically via `youtube-transcript-api`
+- **Article / transcript**: paste any text directly
+- **File upload**: drag-and-drop `.txt` files
+- **Streaming**: summaries stream token-by-token from Ollama via NDJSON
+- **Model switching**: choose between available Ollama models from the UI
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/health` | Health check |
+| `GET`  | `/status` | Service status, available models, Ollama reachability |
+| `GET`  | `/models` | List available models |
+| `POST` | `/summarize/transcript` | Summarize raw text (NDJSON stream) |
+| `POST` | `/summarize/youtube` | Summarize a YouTube video by URL (NDJSON stream) |
+| `POST` | `/summarize/file` | Summarize an uploaded `.txt` file (NDJSON stream) |
+
+All `/summarize/*` endpoints accept an optional `model` field to override the default.
+
+## License
+
+[GPL-3.0](LICENSE.md)

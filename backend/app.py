@@ -1,5 +1,3 @@
-"""Précis API — routes and app setup."""
-
 import asyncio
 from typing import Optional
 

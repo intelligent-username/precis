@@ -3,24 +3,71 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-3) var(--spacing-4);
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-canvas-subtle);
   border-bottom: 1px solid var(--color-border-default);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(12px);
+  background-color: rgba(22, 27, 34, 0.85);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: var(--spacing-2);
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-fg-default);
+  gap: 10px;
   text-decoration: none;
+  color: var(--color-fg-default);
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.model-select {
+  appearance: none;
+  background: var(--color-canvas-default);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  color: var(--color-fg-default);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 28px 6px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.model-select:hover {
+  border-color: var(--color-accent-fg);
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: var(--color-accent-fg);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.model-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Main content */
@@ -52,6 +99,12 @@
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-2);
   overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.2s ease;
+}
+
+.upload-card:hover {
+  box-shadow: var(--shadow-lg);
 }
 
 .upload-header {
@@ -264,7 +317,7 @@
   text-decoration: underline;
 }
 
-/* ── Inline result (transcript tab) ─────────────────────────────────────── */
+/* Inline result */
 .inline-result {
   margin-top: var(--spacing-3);
   padding: var(--spacing-3) var(--spacing-4);

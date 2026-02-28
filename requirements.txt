@@ -1,4 +1,4 @@
-# Core ML (training pipeline — not needed to run the API)
+# ML Training vibes
 torch
 transformers
 accelerate
@@ -10,5 +10,6 @@ sentencepiece
 # API
 fastapi
 uvicorn
-httpx          # async HTTP client for Ollama calls
-python-multipart  # required by FastAPI for file uploads
+httpx                   # async HTTP client for Ollama calls
+python-multipart        # required by FastAPI for file uploads
+youtube-transcript-api  # YouTube transcript fetching

@@ -21,13 +21,13 @@ A system for compressing long-form content into clear, structured summaries. Pr√
 
 ### Run the Fine-Tuning
 
-Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested phi4-mini (from Microsot) and Qwen 3-3b (from Alibaba).
+Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested with phi4-mini (from Microsoft) and Qwen 3-3b (from Alibaba).
 
 ### Backend
 
 ```bash
 cd backend
-pip install fastapi uvicorn httpx python-multipart youtube-transcript-api
+pip install -r ../requirements.txt
 uvicorn app:app --reload
 ```
 

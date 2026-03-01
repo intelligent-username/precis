@@ -13,3 +13,5 @@ uvicorn
 httpx                   # async HTTP client for Ollama calls
 python-multipart        # required by FastAPI for file uploads
 youtube-transcript-api  # YouTube transcript fetching
+python-dotenv           # .env loading for backend/frontend config
+

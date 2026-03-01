@@ -2,11 +2,17 @@ import asyncio
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 
-from config import OLLAMA_BASE_URL, DEFAULT_MODEL, AVAILABLE_MODELS
+from config import (
+    OLLAMA_BASE_URL,
+    DEFAULT_MODEL,
+    AVAILABLE_MODELS,
+    ALLOWED_ORIGINS,
+    API_KEY,
+    MAX_UPLOAD_BYTES,
+)
 from schemas import TranscriptRequest, YouTubeRequest
 from ollama import stream_summary
 from youtube import extract_video_id, fetch_transcript
@@ -19,11 +25,21 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
+
+
+def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+    if not API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfigured: PRECIS_API_KEY must be set.",
+        )
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key.")
 
 
 @app.get("/health")
@@ -56,25 +72,51 @@ async def list_models():
 
 
 @app.post("/summarize/transcript")
-async def summarize_transcript(request: TranscriptRequest):
+async def summarize_transcript(
+    request: TranscriptRequest,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text must not be empty.")
     return stream_summary(request.text, title=request.title, model=request.model)
 
 
 @app.post("/summarize/youtube")
-async def summarize_youtube(request: YouTubeRequest):
+async def summarize_youtube(
+    request: YouTubeRequest,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
     video_id = extract_video_id(request.url)
     text = await asyncio.to_thread(fetch_transcript, video_id)
     return stream_summary(text, model=request.model)
 
 
 @app.post("/summarize/file")
-async def summarize_file(file: UploadFile = File(...), model: Optional[str] = None):
+async def summarize_file(
+    req: Request,
+    file: UploadFile = File(...),
+    model: Optional[str] = None,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    content_length = req.headers.get("content-length")
+    if content_length and int(content_length) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported.")
+
     content = await file.read()
-    text = content.decode("utf-8")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be valid UTF-8 text.")
+
     if not text.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     return stream_summary(text, title=file.filename, model=model)

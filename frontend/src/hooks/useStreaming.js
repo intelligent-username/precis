@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
-
-const API_BASE = 'http://localhost:8000'
+import { API_BASE, authHeaders } from '../config'
 
 export function useStreaming() {
     const [loading, setLoading] = useState(false)
@@ -47,9 +46,10 @@ export function useStreaming() {
         }
 
         if (json) {
-            fetchOpts.headers = { 'Content-Type': 'application/json' }
+            fetchOpts.headers = authHeaders({ 'Content-Type': 'application/json' })
             fetchOpts.body = JSON.stringify(json)
         } else if (formData) {
+            fetchOpts.headers = authHeaders()
             fetchOpts.body = formData
         }
 

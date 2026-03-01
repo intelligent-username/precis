@@ -2,17 +2,15 @@ import { useState, useRef } from 'react'
 import InlineResult from './components/InlineResult'
 import { useStreaming } from './hooks/useStreaming'
 import logoSvg from './assets/logo.svg'
+import { API_BASE, AVAILABLE_MODELS, DEFAULT_MODEL } from './config'
 import './App.css'
-
-const API_BASE = 'http://localhost:8000'
-const MODELS = ['phi4-mini:latest', 'qwen:4b']
 
 function App() {
   const [activeTab, setActiveTab] = useState('youtube')
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [transcript, setTranscript] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
-  const [selectedModel, setSelectedModel] = useState(MODELS[0])
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
   const fileInputRef = useRef(null)
 
   const { loading, response, error, streamingText, submit } = useStreaming()
@@ -54,7 +52,7 @@ function App() {
             onChange={(e) => setSelectedModel(e.target.value)}
             disabled={loading}
           >
-            {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+            {AVAILABLE_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
           <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer" className="btn" style={{ textDecoration: 'none' }}>
             API Docs

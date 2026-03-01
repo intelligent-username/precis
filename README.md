@@ -2,15 +2,28 @@
 
 A system for compressing long-form content into clear, structured summaries. Précis is designed for videos, articles, and papers. Paste a YouTube link, drop in an article, or upload a text file. Précis will pulls the key facts into a single sentence using a local LLM via [Ollama](https://ollama.com).
 
-## Stack
+## Features
 
-| Layer    | Tech |
-|----------|------|
-| Frontend | React 19 + Vite |
-| Backend  | FastAPI (Python) |
-| LLM      | Ollama (phi4-mini, qwen-4b) |
+- **YouTube summarization**: paste a URL, transcript is fetched automatically via `youtube-transcript-api`
+- **Article / transcript**: paste any text directly
+- **File upload**: drag-and-drop `.txt` files
+- **Streaming**: summaries stream token-by-token from Ollama via NDJSON
+- **Model switching**: choose between available Ollama models from the UI
 
-## Setup
+## API Endpoints
+
+| Method  |       Path              |     Description       |
+|---------|-------------------------|-----------------------|
+| `GET`   | `/health`               | Health check          |
+| `GET`   | `/status`               | Ollama statuses, etc. |
+| `GET`   | `/models`               | List available models |
+| `POST`  | `/summarize/transcript` | Raw text summary      |
+| `POST`  | `/summarize/youtube`    | YouTube video by URL  |
+| `POST`  | `/summarize/file`       | `.txt` file summary   |
+
+All `/summarize/*` endpoints accept an optional `model` field to override the default.
+
+## Local Setup
 
 ### Prerequisites
 
@@ -43,26 +56,79 @@ npm run dev
 
 Runs on `http://localhost:5173`.
 
-## Features
+<!-- ## Data -->
 
-- **YouTube summarization**: paste a URL, transcript is fetched automatically via `youtube-transcript-api`
-- **Article / transcript**: paste any text directly
-- **File upload**: drag-and-drop `.txt` files
-- **Streaming**: summaries stream token-by-token from Ollama via NDJSON
-- **Model switching**: choose between available Ollama models from the UI
+<!-- Later, for fine-tuning data details -->
 
-## API Endpoints
+<!-- Interview Dataset -->
+<!-- 
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/health` | Health check |
-| `GET`  | `/status` | Service status, available models, Ollama reachability |
-| `GET`  | `/models` | List available models |
-| `POST` | `/summarize/transcript` | Summarize raw text (NDJSON stream) |
-| `POST` | `/summarize/youtube` | Summarize a YouTube video by URL (NDJSON stream) |
-| `POST` | `/summarize/file` | Summarize an uploaded `.txt` file (NDJSON stream) |
+@article{zhu2021mediasum,
+  title={MediaSum: A Large-scale Media Interview Dataset for Dialogue Summarization},
+  author={Zhu, Chenguang and Liu, Yang and Mei, Jie and Zeng, Michael},
+  journal={arXiv preprint arXiv:2103.06410},
+  year={2021}
+} 
 
-All `/summarize/*` endpoints accept an optional `model` field to override the default.
+-->
+
+<!--------------------------------------------------------------------------------------------------->
+
+<!-- 
+
+@inproceedings{chen-etal-2021-dialogsum,
+    title = "{D}ialog{S}um: {A} Real-Life Scenario Dialogue Summarization Dataset",
+    author = "Chen, Yulong  and
+      Liu, Yang  and
+      Chen, Liang  and
+      Zhang, Yue",
+    booktitle = "Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021",
+    month = aug,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.findings-acl.449",
+    doi = "10.18653/v1/2021.findings-acl.449",
+    pages = "5062--5074",
+}
+
+-->
+
+<!------------------------------------------------------------------------------------------------->
+
+<!-- "Single question followed by an answer" dataset -->
+
+<!--
+
+@article{wang2022squality,
+  title        = {SQuALITY: Building a Long-Document Summarization Dataset the Hard Way},
+  author       = {Wang, Alex and Pang, Richard Yuanzhe and Chen, Angelica and Phang, Jason and Bowman, Samuel R.},
+  journal      = {arXiv preprint arXiv:2205.11465},
+  year         = {2022},
+  archivePrefix = {arXiv},
+  eprint       = {2205.11465},
+  primaryClass = {cs.CL},
+  doi          = {10.48550/arXiv.2205.11465},
+  url          = {https://doi.org/10.48550/arXiv.2205.11465}
+}
+
+-->
+
+<!------------------------------------------------------------------------------------------------->
+
+<!-- High Quality Query-Answer (concise) examples -->
+
+<!--
+
+@inproceedings{nguyen2016msmarco,
+  title     = {MS MARCO: A Human Generated MAchine Reading COmprehension Dataset},
+  author    = {Nguyen, Tri and Rosenberg, Mir and Song, Xia and Gao, Jianfeng and Tiwary, Saurabh and Majumder, Rangan and Deng, Li},
+  booktitle = {Proceedings of the Workshop on Cognitive Computation: Integrating Neural and Symbolic Approaches 2016},
+  year      = {2016},
+  publisher = {CEUR-WS.org}
+}
+
+-->
 
 ## License
 

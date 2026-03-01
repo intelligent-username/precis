@@ -2,7 +2,10 @@
 # Python Remainders
 **cache**
 *.ipynb
-.venv
+*.venv
+.env
+.env.*
+!.env.example
 
 # Front end
 node_modules

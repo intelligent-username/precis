@@ -1,18 +1,15 @@
-# Sync HuggingFace
-
-name: Sync
+name: Sync to Hugging Face hub
 on: [push]
-jobs:
-  sync:
-    runs-on: ubuntu-latest
 
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with: { python-version: '3.9' }
-
-      - run: pip install huggingface_hub
-
-      - env: { HF_TOKEN: '${{ secrets.HF_TOKEN }}' }
-        run: python -c "import os; from huggingface_hub import HfApi; HfApi().upload_folder(repo_id='compendious/precis', folder_path='.', repo_type='space', token=os.environ['HF_TOKEN'], ignore_patterns=['.git*'])"
-  
+        with:
+          fetch-depth: 0
+          lfs: true
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: git push --force https://compendious:${HF_TOKEN}@huggingface.co/spaces/compendious/precis main

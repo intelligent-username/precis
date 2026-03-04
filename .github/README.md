@@ -1,16 +1,6 @@
----
-title: Précis
-emoji: 📝
-colorFrom: blue
-colorTo: purple
-sdk: docker
-sdk_version: "1"
-python_version: "3.11"
-app_file: app.py
-pinned: false
----
-
 # Précis
+
+<!-- This version of the README is created just for HuggingFace to work -->
 
 A system for compressing long-form content into clear, structured summaries. Précis is designed for videos, articles, and papers. Paste a YouTube link, drop in an article, or upload a text file. Précis will pulls the key facts into a single sentence using a local LLM via [Ollama](https://ollama.com).
 

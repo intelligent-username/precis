@@ -40,6 +40,7 @@ Follow the scripts in `scripts/`, using any model you prefer. This project has b
 
 ```bash
 cd backend
+# Create a venv or conda environment or whatever else you may want
 pip install -r ../requirements.txt
 uvicorn app:app --reload
 ```
@@ -121,7 +122,7 @@ Runs on `http://localhost:5173`.
 <!--
 
 @inproceedings{nguyen2016msmarco,
-  title     = {MS MARCO: A Human Generated MAchine Reading COmprehension Dataset},
+  title     = {MS MARCO: A Human Generated Machine Reading Comprehension Dataset},
   author    = {Nguyen, Tri and Rosenberg, Mir and Song, Xia and Gao, Jianfeng and Tiwary, Saurabh and Majumder, Rangan and Deng, Li},
   booktitle = {Proceedings of the Workshop on Cognitive Computation: Integrating Neural and Symbolic Approaches 2016},
   year      = {2016},

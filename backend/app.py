@@ -42,6 +42,16 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-
         raise HTTPException(status_code=401, detail="Invalid API key.")
 
 
+@app.get("/")
+async def root():
+    return {
+        "service": "Précis API",
+        "docs": "/docs",
+        "health": "/health",
+        "status": "/status",
+    }
+
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "precis"}
@@ -68,6 +78,18 @@ async def status():
 
 @app.get("/models")
 async def list_models():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            r.raise_for_status()
+            payload = r.json() if r.content else {}
+            installed = [m.get("name") for m in payload.get("models", []) if m.get("name")]
+            if installed:
+                default = DEFAULT_MODEL if DEFAULT_MODEL in installed else installed[0]
+                return {"default": default, "available": installed}
+    except Exception:
+        pass
+
     return {"default": DEFAULT_MODEL, "available": AVAILABLE_MODELS}
 
 

@@ -1,4 +1,4 @@
-export default function InlineResult({ error, loading, response, streamingText, selectedModel, loadingLabel }) {
+export default function InlineResult({ error, loading, response, streamingText, selectedModel, loadingLabel, placeholderText }) {
     return (
         <>
             {error && (
@@ -17,7 +17,11 @@ export default function InlineResult({ error, loading, response, streamingText, 
                         <span className="response-badge" style={{ marginLeft: 'auto' }}>{selectedModel}</span>
                     </div>
                     <p className="inline-result__text">
-                        {streamingText || <span className="streaming-placeholder">Waiting for model…</span>}
+                        {streamingText || (
+                            <span className="streaming-placeholder">
+                                {placeholderText || loadingLabel || 'Waiting for model…'}
+                            </span>
+                        )}
                         <span className="streaming-cursor">▌</span>
                     </p>
                 </div>

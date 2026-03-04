@@ -27,27 +27,27 @@ All `/summarize/*` endpoints accept an optional `model` field to override the de
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+ (or [Bun](https://bun.sh))
-- [Ollama](https://ollama.com) installed and running (`ollama serve`)
-- At least one model pulled: `ollama pull phi4-mini:latest`
+- Python 3.11+,
+- Node.js 18+ (or an alternative like [Bun](https://bun.sh)),
+- [Ollama](https://ollama.com) installed and running (`ollama serve` is the command, although it may be on auto-start).
+- At least one model pulled: `ollama pull phi4-mini:latest` (for example)
 
 ### Run the Fine-Tuning
 
-Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested with phi4-mini (from Microsoft) and Qwen 3-3b (from Alibaba).
+Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested with phi4-mini (from Microsoft) and Qwen 3-4b (from Alibaba) (`ollama pull qwen3:4b` to pull it).
 
-### Backend
+### Start the Backend
 
 ```bash
-cd backend
 # Create a venv or conda environment or whatever else you may want
 pip install -r ../requirements.txt
+cd backend
 uvicorn app:app --reload
 ```
 
 Runs on `http://localhost:8000`. Interactive docs at `/docs`.
 
-### Frontend
+### Run the Frontend
 
 ```bash
 cd frontend

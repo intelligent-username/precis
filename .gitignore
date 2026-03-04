@@ -3,9 +3,17 @@
 **cache**
 *.ipynb
 *.venv
+temp.py
+
+# Secrets
 .env
 .env.*
 !.env.example
+
+# Leftovers
+*.csv
+*.json*
+/*data*/
 
 # Front end
 node_modules

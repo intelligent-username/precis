@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import InlineResult from './components/InlineResult'
 import { useStreaming } from './hooks/useStreaming'
 import logoSvg from './assets/logo.svg'
-import { API_BASE, AVAILABLE_MODELS, DEFAULT_MODEL } from './config'
+import { API_BASE } from './config'
 import './App.css'
 
 function App() {
@@ -10,13 +10,40 @@ function App() {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [transcript, setTranscript] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [models, setModels] = useState([])
+  const [selectedModel, setSelectedModel] = useState('')
   const fileInputRef = useRef(null)
 
   const { loading, response, error, streamingText, submit } = useStreaming()
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/models`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+
+        const available = Array.isArray(data.available) ? data.available : []
+        setModels(available)
+
+        const serverDefault = typeof data.default === 'string' ? data.default : ''
+        setSelectedModel((prev) => prev || serverDefault || available[0] || '')
+      } catch {
+        // Non-fatal: model list stays empty; backend will still pick default if model omitted.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const handleSubmit = () =>
-    submit(activeTab, { youtubeUrl, transcript, selectedFile, selectedModel })
+    submit(activeTab, {
+      youtubeUrl,
+      transcript,
+      selectedFile,
+      selectedModel: selectedModel || undefined,
+    })
 
   const handleFileDrop = (e) => {
     e.preventDefault()
@@ -50,9 +77,9 @@ function App() {
             className="model-select"
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={loading}
+            disabled={loading || models.length === 0}
           >
-            {AVAILABLE_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
           <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer" className="btn" style={{ textDecoration: 'none' }}>
             API Docs
@@ -102,7 +129,13 @@ function App() {
                     />
                     <p className="form-hint">Paste a YouTube URL. Ctrl+Enter to generate.</p>
                   </div>
-                  {activeTab === 'youtube' && <InlineResult {...resultProps} loadingLabel="Fetching transcript…" />}
+                  {activeTab === 'youtube' && (
+                    <InlineResult
+                      {...resultProps}
+                      loadingLabel="Fetching transcript…"
+                      placeholderText="Fetching transcript…"
+                    />
+                  )}
                 </div>
 
                 {/* Transcript */}
@@ -124,7 +157,13 @@ function App() {
                       {' '}to generate.
                     </p>
                   </div>
-                  {activeTab === 'transcript' && <InlineResult {...resultProps} loadingLabel="Generating…" />}
+                  {activeTab === 'transcript' && (
+                    <InlineResult
+                      {...resultProps}
+                      loadingLabel="Generating…"
+                      placeholderText="Waiting for model…"
+                    />
+                  )}
                 </div>
 
                 {/* File upload */}
@@ -162,7 +201,13 @@ function App() {
                       </div>
                     )}
                   </div>
-                  {activeTab === 'file' && <InlineResult {...resultProps} loadingLabel="Reading file…" />}
+                  {activeTab === 'file' && (
+                    <InlineResult
+                      {...resultProps}
+                      loadingLabel="Reading file…"
+                      placeholderText="Reading file…"
+                    />
+                  )}
                 </div>
 
                 <div className="submit-section">

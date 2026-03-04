@@ -13,6 +13,7 @@ export function useStreaming() {
         const decoder = new TextDecoder()
         let accumulated = ''
         let buffer = ''
+        let streamError = null
 
         while (true) {
             const { done, value } = await reader.read()
@@ -26,6 +27,10 @@ export function useStreaming() {
                 if (!line.trim()) continue
                 try {
                     const chunk = JSON.parse(line)
+                    if (chunk.error) {
+                        streamError = String(chunk.error)
+                        continue
+                    }
                     if (chunk.response) {
                         accumulated += chunk.response
                         setStreamingText(accumulated)
@@ -34,7 +39,16 @@ export function useStreaming() {
             }
         }
 
-        return accumulated.trim()
+        if (streamError) {
+            throw new Error(streamError)
+        }
+
+        const finalText = accumulated.trim()
+        if (!finalText) {
+            throw new Error('Model returned an empty response. Try again or pick a different model.')
+        }
+
+        return finalText
     }
 
     const streamFrom = async (endpoint, { json, formData } = {}) => {

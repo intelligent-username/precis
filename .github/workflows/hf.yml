@@ -9,7 +9,7 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
-      - name: Push to hub
+      - name: Push to HuggingFace copy of this repo
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push https://compendious:${HF_TOKEN}@huggingface.co/spaces/compendious/precis main
+        run: git push -f https://compendious:${HF_TOKEN}@huggingface.co/spaces/compendious/precis main

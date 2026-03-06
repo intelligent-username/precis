@@ -1,7 +1,5 @@
 # Précis
 
-<!-- This version of the README is created just for HuggingFace to work -->
-
 A system for compressing long-form content into clear, structured summaries. Précis is designed for videos, articles, and papers. Paste a YouTube link, drop in an article, or upload a text file. Précis will pulls the key facts into a single sentence using a local LLM via [Ollama](https://ollama.com).
 
 ## Features
@@ -36,7 +34,32 @@ All `/summarize/*` endpoints accept an optional `model` field to override the de
 
 ### Run the Fine-Tuning
 
-Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested with phi4-mini (from Microsoft) and Qwen 3-4b (from Alibaba) (`ollama pull qwen3:4b` to pull it).
+Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested with phi4-mini (from Microsoft) and Qwen 3-4b (from Alibaba).
+
+You can pull the raw models with:
+
+```bash
+ollama pull phi4-mini:latest
+ollama pull qwen3:4b
+# And any other models you may want
+```
+
+<!-- 
+You can also just download the fine-tuned versions right away from HuggingFace by running the following script, which downloads the fine-tuned models from my HuggingFace space:
+
+```bash
+
+```
+ -->
+
+### Test the Quality of the Fine-Tuning
+
+Run the following script on the `test` split in order to get a sense of how accurately the model is summarizing the context. The script will use the BERTScore metric (which compares the sentiment of the generated summary with the sentiment of the reference summary) to give you a score out of 1.0, where higher is better. BERT is the most appropriate metric for this task since we want to ensure that the generated summary captures the same key facts as the reference summary, without penalizing different wording.
+
+```bash
+# Make sure you have the appropriate libraries installed (see requirements.txt and the instructions for running the backend).
+python -m scripts.test --model phi4-mini:latest
+```
 
 ### Start the Backend
 
@@ -59,70 +82,87 @@ npm run dev
 
 Runs on `http://localhost:5173`.
 
-<!-- ## Data -->
+## Data
 
-<!-- Later, for fine-tuning data details -->
+<!-- markdownlint-disable MD033 -->
 
-<!-- Interview Dataset -->
-<!-- 
+References for datasets/papers used in this project (with BibTeX available if you need to cite them formally).
 
+### MediaSum (Interview Summarization)
+
+Zhu, C., Liu, Y., Mei, J., & Zeng, M. (2021). *MediaSum: A Large-scale Media Interview Dataset for Dialogue Summarization*. arXiv:2103.06410. [https://arxiv.org/abs/2103.06410](https://arxiv.org/abs/2103.06410)
+
+<details>
+<summary>BibTeX</summary>
+
+```bibtex
 @article{zhu2021mediasum,
-  title={MediaSum: A Large-scale Media Interview Dataset for Dialogue Summarization},
-  author={Zhu, Chenguang and Liu, Yang and Mei, Jie and Zeng, Michael},
-  journal={arXiv preprint arXiv:2103.06410},
-  year={2021}
-} 
+  title   = {MediaSum: A Large-scale Media Interview Dataset for Dialogue Summarization},
+  author  = {Zhu, Chenguang and Liu, Yang and Mei, Jie and Zeng, Michael},
+  journal = {arXiv preprint arXiv:2103.06410},
+  year    = {2021}
+}
+```
 
--->
+</details>
 
-<!--------------------------------------------------------------------------------------------------->
+### DialogSum (Dialogue Summarization)
 
-<!-- 
+Chen, Y., Liu, Y., Chen, L., & Zhang, Y. (2021). *DialogSum: A Real-Life Scenario Dialogue Summarization Dataset*. Findings of ACL-IJCNLP 2021. [https://aclanthology.org/2021.findings-acl.449](https://aclanthology.org/2021.findings-acl.449)
 
+<details>
+
+<summary>BibTeX</summary>
+
+```bibtex
 @inproceedings{chen-etal-2021-dialogsum,
-    title = "{D}ialog{S}um: {A} Real-Life Scenario Dialogue Summarization Dataset",
-    author = "Chen, Yulong  and
-      Liu, Yang  and
-      Chen, Liang  and
-      Zhang, Yue",
-    booktitle = "Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021",
-    month = aug,
-    year = "2021",
-    address = "Online",
-    publisher = "Association for Computational Linguistics",
-    url = "https://aclanthology.org/2021.findings-acl.449",
-    doi = "10.18653/v1/2021.findings-acl.449",
-    pages = "5062--5074",
+  title     = {{D}ialog{S}um: {A} Real-Life Scenario Dialogue Summarization Dataset},
+  author    = {Chen, Yulong and Liu, Yang and Chen, Liang and Zhang, Yue},
+  booktitle = {Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021},
+  month     = aug,
+  year      = {2021},
+  address   = {Online},
+  publisher = {Association for Computational Linguistics},
+  url       = {https://aclanthology.org/2021.findings-acl.449},
+  doi       = {10.18653/v1/2021.findings-acl.449},
+  pages     = {5062--5074}
 }
+```
 
--->
+</details>
 
-<!------------------------------------------------------------------------------------------------->
+### SQuALITY (Long-Document QA)
 
-<!-- "Single question followed by an answer" dataset -->
+Wang, A., Pang, R. Y., Chen, A., Phang, J., & Bowman, S. R. (2022). *SQuALITY: Building a Long-Document Summarization Dataset the Hard Way*. arXiv:2205.11465. [https://arxiv.org/abs/2205.11465](https://arxiv.org/abs/2205.11465)
 
-<!--
+<details>
 
+<summary>BibTeX</summary>
+
+```bibtex
 @article{wang2022squality,
-  title        = {SQuALITY: Building a Long-Document Summarization Dataset the Hard Way},
-  author       = {Wang, Alex and Pang, Richard Yuanzhe and Chen, Angelica and Phang, Jason and Bowman, Samuel R.},
-  journal      = {arXiv preprint arXiv:2205.11465},
-  year         = {2022},
+  title         = {SQuALITY: Building a Long-Document Summarization Dataset the Hard Way},
+  author        = {Wang, Alex and Pang, Richard Yuanzhe and Chen, Angelica and Phang, Jason and Bowman, Samuel R.},
+  journal       = {arXiv preprint arXiv:2205.11465},
+  year          = {2022},
   archivePrefix = {arXiv},
-  eprint       = {2205.11465},
-  primaryClass = {cs.CL},
-  doi          = {10.48550/arXiv.2205.11465},
-  url          = {https://doi.org/10.48550/arXiv.2205.11465}
+  eprint        = {2205.11465},
+  primaryClass  = {cs.CL},
+  doi           = {10.48550/arXiv.2205.11465},
+  url           = {https://doi.org/10.48550/arXiv.2205.11465}
 }
+```
 
--->
+</details>
 
-<!------------------------------------------------------------------------------------------------->
+### MS MARCO (Concise QA)
 
-<!-- High Quality Query-Answer (concise) examples -->
+Nguyen, T., Rosenberg, M., Song, X., Gao, J., Tiwary, S., Majumder, R., & Deng, L. (2016). *MS MARCO: A Human Generated Machine Reading Comprehension Dataset*.
 
-<!--
+<details>
+<summary>BibTeX</summary>
 
+```bibtex
 @inproceedings{nguyen2016msmarco,
   title     = {MS MARCO: A Human Generated Machine Reading Comprehension Dataset},
   author    = {Nguyen, Tri and Rosenberg, Mir and Song, Xia and Gao, Jianfeng and Tiwary, Saurabh and Majumder, Rangan and Deng, Li},
@@ -130,8 +170,9 @@ Runs on `http://localhost:5173`.
   year      = {2016},
   publisher = {CEUR-WS.org}
 }
+```
 
--->
+</details>
 
 ## License
 

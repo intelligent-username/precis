@@ -4,6 +4,7 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from config import (
     OLLAMA_BASE_URL,
@@ -31,6 +32,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key"],
 )
 
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     if not API_KEY:

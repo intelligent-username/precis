@@ -3,17 +3,17 @@ Pulls raw samples of 10k each from the [cited in README] datasets used in this p
 In the final version of the training data, a lot of the example outputs are tuned, and they are all merged into a single 
 
 HuggingFace seems to have disabled this functionality.
-Currently trying to see how to work around it.
+Currently trying to see how to work around it
 """
 
 import json
 from datasets import load_dataset
 
 targets = {
-    "mediasum": ("nbroad/mediasum", None, "train"),  # Parquet‑exported version, no loader script needed :contentReference[oaicite:0]{index=0}
-    "dialogsum": ("knkarthick/dialogsum", None, "train"),  # CSV on HF :contentReference[oaicite:1]{index=1}
-    "squality": ("mattercalm/squality", None, "train"),  # assumed generic supported format
-    "msmarco_corpus": ("Hyukkyu/beir-msmarco", "corpus", "train"),  # Parquet migrated version :contentReference[oaicite:2]{index=2}
+    "mediasum": ("nbroad/mediasum", None, "train"),
+    "dialogsum": ("knkarthick/dialogsum", None, "train"),
+    "squality": ("mattercalm/squality", None, "train"),
+    "msmarco_corpus": ("Hyukkyu/beir-msmarco", "corpus", "train"),
 }
 
 for name, (repo, config, split) in targets.items():

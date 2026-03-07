@@ -14,6 +14,7 @@ temp.py
 *.csv
 *.json*
 /*data*/
+notes/
 
 # Front end
 node_modules

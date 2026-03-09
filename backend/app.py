@@ -32,7 +32,10 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key"],
 )
 
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+# Only mount frontend in production when dist/ exists
+import os
+if os.path.isdir("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     if not API_KEY:

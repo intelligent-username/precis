@@ -87,13 +87,17 @@ Runs on `http://localhost:8000`. Interactive docs at `/docs`.
 
 ### Run the Frontend
 
+In another terminal, run:
+
 ```bash
 cd frontend
-npm install   # or whatever replacement for npm you may be using
+npm install   # or use any npm alternative
 npm run dev
 ```
 
 Runs on `http://localhost:5173`.
+
+**Development Setup**: The frontend dev server will automatically proxy API calls to the backend. Just access the app at `http://localhost:5173` during development.
 
 ## Data
 
@@ -146,11 +150,11 @@ Chen, Y., Liu, Y., Chen, L., & Zhang, Y. (2021). *DialogSum: A Real-Life Scenari
 
 ### SQuALITY (Long-Document QA)
 
+This dataset contains around 6000 stories ("long documents") from Project Gutenberg, along with human-written summaries and question-answer pairs. The dataset is designed to test the ability of models to understand and summarize long-form content. GitHub repo: [https://github.com/nyu-mll/SQuALITY](https://github.com/nyu-mll/SQuALITY)
+
 Wang, A., Pang, R. Y., Chen, A., Phang, J., & Bowman, S. R. (2022). *SQuALITY: Building a Long-Document Summarization Dataset the Hard Way*. arXiv:2205.11465. [https://arxiv.org/abs/2205.11465](https://arxiv.org/abs/2205.11465)
 
-<details>
-
-<summary>BibTeX</summary>
+<details> <summary>BibTeX</summary>
 
 ```bibtex
 @article{wang2022squality,
@@ -170,10 +174,11 @@ Wang, A., Pang, R. Y., Chen, A., Phang, J., & Bowman, S. R. (2022). *SQuALITY: B
 
 ### MS MARCO (Concise QA)
 
+This is a massive dataset of real user queries from Bing, along with passages from web documents that are relevant to those queries.
+
 Nguyen, T., Rosenberg, M., Song, X., Gao, J., Tiwary, S., Majumder, R., & Deng, L. (2016). *MS MARCO: A Human Generated Machine Reading Comprehension Dataset*.
 
-<details>
-<summary>BibTeX</summary>
+<details><summary>BibTeX</summary>
 
 ```bibtex
 @inproceedings{nguyen2016msmarco,
@@ -182,6 +187,25 @@ Nguyen, T., Rosenberg, M., Song, X., Gao, J., Tiwary, S., Majumder, R., & Deng, 
   booktitle = {Proceedings of the Workshop on Cognitive Computation: Integrating Neural and Symbolic Approaches 2016},
   year      = {2016},
   publisher = {CEUR-WS.org}
+}
+```
+
+</details>
+
+### QMSum
+
+This dataset is for specifically taking in transcripts and answering questions about them. The GitHub repo for the dataset [and other details is here](https://github.com/Yale-LILY/QMSum).
+
+Zhong, M., Yin, D., Yu, T., Zaidi, A., Mutuma, M., Jha, R., Awadallah, A. H., Celikyilmaz, A., Liu, Y., Qiu, X., & Radev, D. (2021). *QMSum: A New Benchmark for Query-based Multi-domain Meeting Summarization*. NAACL 2021. [https://arxiv.org/abs/2104.05938](https://arxiv.org/abs/2104.05938)
+
+<details><summary>BibTeX</summary>
+
+```bibtex
+@inproceedings{zhong2021qmsum,
+   title={{QMS}um: {A} {N}ew {B}enchmark for {Q}uery-based {M}ulti-domain {M}eeting {S}ummarization},
+   author={Zhong, Ming and Yin, Da and Yu, Tao and Zaidi, Ahmad and Mutuma, Mutethia and Jha, Rahul and Hassan Awadallah, Ahmed and Celikyilmaz, Asli and Liu, Yang and Qiu, Xipeng and Radev, Dragomir},
+   booktitle={North American Association for Computational Linguistics (NAACL)},
+   year={2021}
 }
 ```
 

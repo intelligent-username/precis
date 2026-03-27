@@ -24,7 +24,7 @@ def write_jsonl(lines, output_path):
         for line in lines:
             data = json.loads(line)
             new_data = {
-                "id": data["id"],
+                "id": i,
                 "original_source": "MediaSum",
                 "url": data["url"],
                 "summary": data["summary"],

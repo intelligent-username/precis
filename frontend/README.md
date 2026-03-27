@@ -1,4 +1,4 @@
-# Précis — Frontend
+# Frontend
 
 React 19 + Vite frontend for Précis. See the [root README](../README.md) for full setup instructions.
 

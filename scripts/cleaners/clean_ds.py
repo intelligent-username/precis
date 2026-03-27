@@ -22,7 +22,7 @@ def write_jsonl(rows, output_path):
     with open(output_path, 'w', encoding='utf-8') as f:
         for row in rows:
             new_data = {
-                "id": row["id"],
+                "id": i,
                 "original_source": "DialogSum",
                 "dialogue": row["dialogue"],
                 "summary": row["summary"],

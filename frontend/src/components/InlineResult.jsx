@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown'
+
 export default function InlineResult({ error, loading, response, streamingText, selectedModel, loadingLabel, placeholderText }) {
     return (
         <>
@@ -35,7 +37,13 @@ export default function InlineResult({ error, loading, response, streamingText, 
                         Summary
                         <span className="response-badge" style={{ marginLeft: 'auto' }}>{response.model ?? 'phi4-mini'}</span>
                     </div>
-                    <p className="inline-result__text">{response.summary}</p>
+                    <div className="inline-result__text">
+                        <ReactMarkdown
+                            components={{ p: ({ children }) => <span>{children}</span> }}
+                        >
+                            {response.summary}
+                        </ReactMarkdown>
+                    </div>
                 </div>
             )}
         </>

@@ -378,8 +378,25 @@
   font-size: 14px;
   line-height: 1.7;
   color: var(--color-fg-default);
-  white-space: pre-wrap;
   margin: 0;
+}
+
+.inline-result__text strong {
+  font-weight: 600;
+  color: var(--color-fg-default);
+}
+
+.inline-result__text em {
+  font-style: italic;
+}
+
+.inline-result__text code {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  background-color: var(--color-canvas-inset);
+  border: 1px solid var(--color-border-muted);
+  border-radius: 3px;
+  padding: 0 4px;
 }
 
 /* Streaming cursor blink */

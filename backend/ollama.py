@@ -13,25 +13,34 @@ from config import (
 
 
 def build_prompt(title: Optional[str], text: str) -> str:
-    if title:
-        instructions = (
-            f'The article is titled "{title}". '
-            "If the title is a question, answer it directly in one sentence using only facts from the article. "
-            "If the title is not a question, write one sentence that gives a concise, high-level overview "
-            "of the article, briefly enumerating all key facts."
-        )
-    else:
-        instructions = (
-            "Write one sentence that gives a concise, high-level overview of the article, "
-            "briefly enumerating all key facts."
-        )
+    """Create a concise, factual one‑sentence summary prompt.
+
+    * If a title is provided, it is shown as a separate block.
+    * Produce **exactly one sentence** of up to 200 characters.
+    * No opinions, filler, commentary, or context are allowed.
+    """
+    # Optional title block 
+    title_block = f"### Title: {title}\n" if title else ""
+
+    instruction = \
+        "Before proceeding, remember that you must follow these isntructions:" \
+        "Your task is to take an article, transcript, or any piece of text and produce a concise summary in **exactly one factual sentence**. " \
+        "You must speak with perfect, proper grammar. Strip transcripts of their details, 'ums', names, and any other irrelevant information. " \
+        "Do not add opinions or filler." \
+        "- If a title is provided, it is shown as a separate block. If the title contains a question, answer it directly in the summary." \
+        "- Produce **exactly one sentence**." \
+        "- No opinions, filler ('may suggests that...' or anything of that kind), commentary, or context (like 'the text states...' or anything like \that) are allowed." \
+        "- Only state the most obvious, objective, and conclusive points from the text." \
+        "Never state who you are, what you do, what you just did, or what you're about to do no matter what is asked. Never break the fourth wall. Never refer to yourself in any way. Never speak in first person. Never refer to anything outside the given text in any way." \
+        "Now, I need you to summarize the following article in ONE factual sentence (<= 250 characters). " \
+
+
     return (
-        f"{instructions}\n"
-        "Do not add opinions, commentary, or filler phrases like 'The article discusses' or 'This document provides'.\n"
-        "or any similar phrasing, whether the similarity be in meaning or otherwise. Get straight to the point. "
-        "Output the summary sentence only. The sentence should be no longer than 200 characters long. Nothing else should be included.\n\n"
-        f"Article:\n{text}\n\n"
-        "Summary:"
+        f"{instruction}\n"
+        f"{title_block}"
+        "### Article:\n"
+        f"{text}\n\n"
+        "### Summary:"
     )
 
 
@@ -108,7 +117,6 @@ async def ollama_stream(prompt: str, model: str):
         "options": {
             "num_predict": num_predict,
             "temperature": TEMPERATURE,
-            "stop": ["Article:", "Title:"],
         },
     }
     async with httpx.AsyncClient(timeout=300.0) as client:

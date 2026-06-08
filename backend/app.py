@@ -1,4 +1,3 @@
-import asyncio
 from typing import Optional
 
 import httpx
@@ -16,7 +15,7 @@ from config import (
 )
 from schemas import TranscriptRequest, YouTubeRequest
 from ollama import stream_summary
-from youtube import extract_video_id, fetch_transcript
+from helpers.transcript import transcript as fetch_yt_transcript
 
 app = FastAPI(
     title="Précis API",
@@ -46,6 +45,10 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key.")
 
+
+@app.get("/favicon.ico")
+async def favicon():
+    return {}
 
 @app.get("/")
 async def root():
@@ -115,9 +118,8 @@ async def summarize_youtube(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
-    video_id = extract_video_id(request.url)
-    text = await asyncio.to_thread(fetch_transcript, video_id)
-    return stream_summary(text, model=request.model)
+    title, text = await fetch_yt_transcript(request.url)
+    return stream_summary(text, title=title, model=request.model)
 
 
 @app.post("/summarize/file")

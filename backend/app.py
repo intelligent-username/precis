@@ -157,7 +157,7 @@ async def summarize_transcript(
     verify_api_key(x_api_key)
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text must not be empty.")
-    return stream_summary(request.text, title=request.title, model=request.model)
+    return await stream_summary(request.text, title=request.title, model=request.model)
 
 
 @app.post("/summarize/youtube")
@@ -167,7 +167,7 @@ async def summarize_youtube(
 ):
     verify_api_key(x_api_key)
     title, text = await fetch_yt_transcript(request.url)
-    return stream_summary(text, title=title, model=request.model)
+    return await stream_summary(text, title=title, model=request.model)
 
 
 @app.post("/summarize/file")
@@ -196,7 +196,7 @@ async def summarize_file(
 
     if not text.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-    return stream_summary(text, title=file.filename, model=model)
+    return await stream_summary(text, title=file.filename, model=model)
 
 
 if __name__ == "__main__":

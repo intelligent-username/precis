@@ -16,7 +16,13 @@ function App() {
   const fileInputRef = useRef(null)
   const warmupAbortRef = useRef(null)
 
-  const { loading, response, error, streamingText, submit, cancel } = useStreaming()
+  // One streaming instance per tab — state is fully independent and persists across tab switches
+  const ytStreaming = useStreaming()
+  const textStreaming = useStreaming()
+  const fileStreaming = useStreaming()
+
+  const streaming = { youtube: ytStreaming, transcript: textStreaming, file: fileStreaming }
+  const active = streaming[activeTab]
 
   useEffect(() => {
     let cancelled = false
@@ -92,7 +98,7 @@ function App() {
   }, [selectedModel])
 
   const handleSubmit = () =>
-    submit(activeTab, {
+    active.submit(activeTab, {
       youtubeUrl,
       transcript,
       selectedFile,
@@ -114,10 +120,8 @@ function App() {
   }
 
   const ctrlEnter = (e) => {
-    if (e.key === 'Enter' && e.ctrlKey && !loading) handleSubmit()
+    if (e.key === 'Enter' && e.ctrlKey && !active.loading) handleSubmit()
   }
-
-  const resultProps = { error, loading, response, streamingText, selectedModel }
 
   return (
     <>
@@ -131,7 +135,7 @@ function App() {
             className={`model-select${modelReady === true ? ' model-select--ready' : modelReady === false ? ' model-select--warming' : ''}`}
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={loading || models.length === 0}
+            disabled={active.loading || models.length === 0}
           >
             {models.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
@@ -184,13 +188,15 @@ function App() {
                     />
                     <p className="form-hint">Paste a YouTube URL. Ctrl+Enter to generate.</p>
                   </div>
-                  {activeTab === 'youtube' && (
-                    <InlineResult
-                      {...resultProps}
-                      loadingLabel={streamingText ? 'Generating…' : 'Fetching transcript…'}
-                      placeholderText="Fetching transcript…"
-                    />
-                  )}
+                  <InlineResult
+                    error={ytStreaming.error}
+                    loading={ytStreaming.loading}
+                    response={ytStreaming.response}
+                    streamingText={ytStreaming.streamingText}
+                    selectedModel={selectedModel}
+                    loadingLabel={ytStreaming.streamingText ? 'Generating…' : 'Fetching transcript…'}
+                    placeholderText="Fetching transcript…"
+                  />
                 </div>
 
                 {/* Transcript */}
@@ -212,13 +218,15 @@ function App() {
                       {' '}to generate.
                     </p>
                   </div>
-                  {activeTab === 'transcript' && (
-                    <InlineResult
-                      {...resultProps}
-                      loadingLabel="Generating…"
-                      placeholderText="Waiting for model…"
-                    />
-                  )}
+                  <InlineResult
+                    error={textStreaming.error}
+                    loading={textStreaming.loading}
+                    response={textStreaming.response}
+                    streamingText={textStreaming.streamingText}
+                    selectedModel={selectedModel}
+                    loadingLabel="Generating…"
+                    placeholderText="Waiting for model…"
+                  />
                 </div>
 
                 {/* File upload */}
@@ -256,26 +264,28 @@ function App() {
                       </div>
                     )}
                   </div>
-                  {activeTab === 'file' && (
-                    <InlineResult
-                      {...resultProps}
-                      loadingLabel="Reading file…"
-                      placeholderText="Reading file…"
-                    />
-                  )}
+                  <InlineResult
+                    error={fileStreaming.error}
+                    loading={fileStreaming.loading}
+                    response={fileStreaming.response}
+                    streamingText={fileStreaming.streamingText}
+                    selectedModel={selectedModel}
+                    loadingLabel="Reading file…"
+                    placeholderText="Reading file…"
+                  />
                 </div>
 
                 <div className="submit-section">
-                  {loading && (
-                    <button className="btn btn-cancel" onClick={cancel}>
+                  {active.loading && (
+                    <button className="btn btn-cancel" onClick={active.cancel}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
                       Cancel
                     </button>
                   )}
-                  <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={loading}>
-                    {loading ? (
+                  <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={active.loading}>
+                    {active.loading ? (
                       <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Processing...</>
                     ) : (
                       <>

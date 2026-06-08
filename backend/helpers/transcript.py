@@ -120,6 +120,17 @@ async def transcript(url: str) -> tuple[Optional[str], str]:
     # fetch runs on the event loop — both in parallel.
     title_task = asyncio.create_task(_fetch_title(video_id))
     text = await asyncio.to_thread(_fetch_transcript_sync, video_id)
-    title = await title_task
 
+    # Give the title at most 1 extra second after the transcript is done.
+    # oEmbed can be slow; we never want it to be the bottleneck.
+    try:
+        title = await asyncio.wait_for(asyncio.shield(title_task), timeout=1.0)
+    except (asyncio.TimeoutError, Exception):
+        title_task.cancel()
+        title = None
+
+    # Return the fetched title (or None if unavailable) and the transcript text.
+    # Callers (e.g., backend/app.py) forward the title to `stream_summary`, which includes it in the prompt
+    # via `build_prompt`. If `title` is None, the prompt omits the title block, which is appropriate for
+    # plain‑text or other non‑title scenarios.
     return title, text

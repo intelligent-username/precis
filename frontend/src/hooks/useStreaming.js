@@ -7,6 +7,10 @@ export function useStreaming() {
     const [error, setError] = useState(null)
     const [streamingText, setStreamingText] = useState('')
     const abortRef = useRef(null)
+    // Tracks accumulated text in real-time so cancel() can save it as a response
+    const accumulatedRef = useRef('')
+    // Incremented on each submit so stale completions don't overwrite fresh state
+    const submitIdRef = useRef(0)
 
     const readNDJSONStream = async (res) => {
         const reader = res.body.getReader()
@@ -33,6 +37,7 @@ export function useStreaming() {
                     }
                     if (chunk.response) {
                         accumulated += chunk.response
+                        accumulatedRef.current = accumulated
                         setStreamingText(accumulated)
                     }
                 } catch { /* skip malformed */ }
@@ -80,10 +85,16 @@ export function useStreaming() {
     }
 
     const submit = async (activeTab, { youtubeUrl, transcript, selectedFile, selectedModel }) => {
+        // Abort any in-flight request before starting a new one
+        abortRef.current?.abort()
+
+        const myId = ++submitIdRef.current
+
         setLoading(true)
         setError(null)
         setResponse(null)
         setStreamingText('')
+        accumulatedRef.current = ''
 
         try {
             let summary
@@ -101,15 +112,26 @@ export function useStreaming() {
                 summary = await streamFrom(`/summarize/file?model=${encodeURIComponent(selectedModel)}`, { formData: fd })
             }
 
+            if (submitIdRef.current !== myId) return  // superseded by a newer submit
             setResponse({ summary, success: true, source_type: activeTab, model: selectedModel })
         } catch (err) {
+            if (submitIdRef.current !== myId) return  // superseded — don't touch state
             if (err.name === 'AbortError') {
-                // User cancelled — clear loading silently, keep any partial text
+                // User cancelled — keep whatever was generated so far as the result
+                const partial = accumulatedRef.current.trim()
+                if (partial) {
+                    setResponse({ summary: partial, success: true, source_type: activeTab, model: selectedModel, cancelled: true })
+                }
+                // If nothing was generated yet, just reset silently (no error shown)
                 return
             }
             setError(err.message || 'An error occurred')
         } finally {
-            setLoading(false)
+            // Only the current submit should clear loading — stale ones must not interfere
+            if (submitIdRef.current === myId) {
+                setLoading(false)
+                setStreamingText('')
+            }
         }
     }
 

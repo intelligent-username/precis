@@ -47,15 +47,15 @@ def build_prompt(title: Optional[str], text: str) -> str:
 # Cache for installed models to avoid repeated network calls
 _installed_models_cache: Optional[list] = None
 
-def resolve_model(model: Optional[str]) -> str:
+async def resolve_model(model: Optional[str]) -> str:
     requested = model or ""
 
     # Prefer what Ollama actually has installed, using cache to avoid repeated network calls.
     global _installed_models_cache
     if _installed_models_cache is None:
         try:
-            with httpx.Client(timeout=5.0) as client:
-                r = client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
                 r.raise_for_status()
                 payload = r.json() if r.content else {}
                 _installed_models_cache = [m.get("name") for m in payload.get("models", []) if m.get("name")]
@@ -87,10 +87,10 @@ def resolve_model(model: Optional[str]) -> str:
     return requested
 
 
-def ensure_ollama_reachable() -> None:
+async def ensure_ollama_reachable() -> None:
     try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(f"{OLLAMA_BASE_URL}/api/tags")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
             response.raise_for_status()
     except httpx.ConnectError:
         raise HTTPException(
@@ -152,14 +152,14 @@ async def ollama_stream(prompt: str, model: str):
             yield error_line + "\n"
 
 
-def stream_summary(
+async def stream_summary(
     text: str,
     title: Optional[str] = None,
     model: Optional[str] = None,
 ) -> StreamingResponse:
     """Universal funnel: text -> prompt -> Ollama stream -> NDJSON response."""
-    ensure_ollama_reachable()
-    resolved = resolve_model(model)
+    await ensure_ollama_reachable()
+    resolved = await resolve_model(model)
     prompt = build_prompt(title, text)
     return StreamingResponse(
         ollama_stream(prompt, resolved),

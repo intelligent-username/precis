@@ -35,18 +35,24 @@ def build_prompt(title: Optional[str], text: str) -> str:
     )
 
 
+# Cache for installed models to avoid repeated network calls
+_installed_models_cache: Optional[list] = None
+
 def resolve_model(model: Optional[str]) -> str:
     requested = model or ""
 
-    # Prefer what Ollama actually has installed.
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            r = client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            r.raise_for_status()
-            payload = r.json() if r.content else {}
-            installed = [m.get("name") for m in payload.get("models", []) if m.get("name")]
-    except Exception:
-        installed = []
+    # Prefer what Ollama actually has installed, using cache to avoid repeated network calls.
+    global _installed_models_cache
+    if _installed_models_cache is None:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                r = client.get(f"{OLLAMA_BASE_URL}/api/tags")
+                r.raise_for_status()
+                payload = r.json() if r.content else {}
+                _installed_models_cache = [m.get("name") for m in payload.get("models", []) if m.get("name")]
+        except Exception:
+            _installed_models_cache = []
+    installed = _installed_models_cache
 
     if installed:
         if not requested:

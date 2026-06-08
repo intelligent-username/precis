@@ -1,14 +1,34 @@
-# Précis
+<h1 align="center">Précis</h1>
 
-A system for compressing long-form content into clear, structured summaries. Précis is designed for videos, articles, and papers. Paste a YouTube link, drop in an article, or upload a text file. Précis will pulls the key facts into a single sentence using a local LLM via [Ollama](https://ollama.com).
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue?style=flat-square&logo=python" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/node-18+-green?style=flat-square&logo=nodedotjs" alt="Node 18+">
+  <img src="https://img.shields.io/badge/ollama-required-orange?style=flat-square&logo=ollama" alt="Ollama">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-brightgreen?style=flat-square" alt="License">
+</p>
+
+<p align="center">
+  <em>Compress long-form content into clear, structured summaries.</em>
+</p>
+
+<p align="center">
+  Paste a YouTube link, drop in an article, or upload a text file.<br>
+  Précis extracts the key facts into a concise summary using a local LLM via <a href="https://ollama.com">Ollama</a>.
+</p>
+
+---
 
 ## Features
 
-- **YouTube summarization**: paste a URL, transcript is fetched automatically via `youtube-transcript-api`
-- **Article / transcript**: paste any text directly
-- **File upload**: drag-and-drop `.txt` files
-- **Streaming**: summaries stream token-by-token from Ollama via NDJSON
-- **Model switching**: choose between available Ollama models from the UI
+|           Capability      |                                  Description                                  |
+|---------------------------|-------------------------------------------------------------------------------|
+| **YouTube summarization** | Paste a URL; transcript is fetched automatically via `youtube-transcript-api` |
+| **Article / transcript**  | Paste any text directly                                                       |
+| **File upload**           | Drag-and-drop `.txt` files                                                    |
+| **Streaming**             | Summaries stream token-by-token from Ollama via NDJSON                        |
+| **Model switching**       | Choose between available Ollama models from the UI                            |
+
+---
 
 ## API Endpoints
 
@@ -23,70 +43,71 @@ A system for compressing long-form content into clear, structured summaries. Pr�
 
 All `/summarize/*` endpoints accept an optional `model` field to override the default.
 
+---
+
 ## Local Setup
 
 ### Prerequisites
 
-- Python 3.11+,
-- Node.js 18+ (or an alternative like [Bun](https://bun.sh)),
-- [Ollama](https://ollama.com) installed and running (`ollama serve` is the command, although it may be on auto-start).
-- At least one model pulled: `ollama pull phi4-mini:latest` (for example)
+- **Python** 3.11+
+- **Node.js** 18+ (or an equivalent alternative)
+- **Ollama** (`ollama serve` to run)
+- At least one model pulled, e.g. `ollama pull phi4-mini:latest`
+
+---
 
 ### Run the Fine-Tuning
 
-Follow the scripts in `scripts/`, using any model you prefer. This project has been primarily tested with phi4-mini (from Microsoft) and Qwen 3-4b (from Alibaba).
-
-You can pull the raw models with:
+Scripts live in `scripts/`. The project has been tested primarily with **phi4-mini** (Microsoft) and **Qwen 3-4b** (Alibaba), but you can use whichever model you like.
 
 ```bash
 ollama pull phi4-mini:latest
 ollama pull qwen3:4b
-# And any other models you may want
 ```
 
-<!-- 
-You can also just download the fine-tuned versions right away from HuggingFace by running the following script, which downloads the fine-tuned models from my HuggingFace space:
+---
+
+### Test Fine-Tuning Quality
+
+To evaluate summarization accuracy, run the script below against the `test` split. It uses **BERTScore** (0 to 1.0, higher is better), comparing semantic similarity between generated summaries and references. This captures key facts without penalizing different wording.
 
 ```bash
-
-```
- -->
-
-### Test the Quality of the Fine-Tuning
-
-Run the following script on the `test` split in order to get a sense of how accurately the model is summarizing the context. The script will use the BERTScore metric (which compares the sentiment of the generated summary with the sentiment of the reference summary) to give you a score out of 1.0, where higher is better. BERT is the most appropriate metric for this task since we want to ensure that the generated summary captures the same key facts as the reference summary, without penalizing different wording.
-
-```bash
-# Make sure you have the appropriate libraries installed (see requirements.txt and the instructions for running the backend).
 python -m scripts.test --model phi4-mini:latest
 ```
+
+---
 
 ### Start the Backend
 
 ```bash
-# Create a venv or conda environment or whatever else you may want
 pip install -r ../requirements.txt
 cd backend
 uvicorn app:app --reload
 ```
 
-Runs on `http://localhost:8000`. Interactive docs at `/docs`.
+Served at **`http://localhost:8000`** with interactive docs at `/docs`.
+
+---
 
 ### Run the Frontend
 
 ```bash
 cd frontend
-npm install   # or whatever replacement for npm you may be using
+npm install
 npm run dev
 ```
 
-Runs on `http://localhost:5173`.
+Served at **`http://localhost:5173`**.
+
+The frontend dev server proxies API calls to the backend automatically, so you only need to visit `http://localhost:5173`.
+
+---
 
 ## Data
 
 <!-- markdownlint-disable MD033 -->
 
-References for datasets/papers used in this project (with BibTeX available if you need to cite them formally).
+References for datasets and papers used in this project. Click the arrow to expand BibTeX citations.
 
 ### MediaSum (Interview Summarization)
 
@@ -106,12 +127,13 @@ Zhu, C., Liu, Y., Mei, J., & Zeng, M. (2021). *MediaSum: A Large-scale Media Int
 
 </details>
 
+---
+
 ### DialogSum (Dialogue Summarization)
 
 Chen, Y., Liu, Y., Chen, L., & Zhang, Y. (2021). *DialogSum: A Real-Life Scenario Dialogue Summarization Dataset*. Findings of ACL-IJCNLP 2021. [https://aclanthology.org/2021.findings-acl.449](https://aclanthology.org/2021.findings-acl.449)
 
 <details>
-
 <summary>BibTeX</summary>
 
 ```bibtex
@@ -131,13 +153,16 @@ Chen, Y., Liu, Y., Chen, L., & Zhang, Y. (2021). *DialogSum: A Real-Life Scenari
 
 </details>
 
+---
+
 ### SQuALITY (Long-Document QA)
 
-This dataset contains around 6000 stories ("long documents") from Project Gutenberg, along with human-written summaries and question-answer pairs. The dataset is designed to test the ability of models to understand and summarize long-form content. GitHub repo: [https://github.com/nyu-mll/SQuALITY](https://github.com/nyu-mll/SQuALITY)
+~6,000 stories from Project Gutenberg with human-written summaries and QA pairs, designed to test long-document understanding.
 
-Wang, A., Pang, R. Y., Chen, A., Phang, J., & Bowman, S. R. (2022). *SQuALITY: Building a Long-Document Summarization Dataset the Hard Way*. arXiv:2205.11465. [https://arxiv.org/abs/2205.11465](https://arxiv.org/abs/2205.11465)
+Wang, A., Pang, R. Y., Chen, A., Phang, J., & Bowman, S. R. (2022). *SQuALITY: Building a Long-Document Summarization Dataset the Hard Way*. arXiv:2205.11465. [https://arxiv.org/abs/2205.11465](https://arxiv.org/abs/2205.11465) | [GitHub](https://github.com/nyu-mll/SQuALITY)
 
-<details> <summary>BibTeX</summary>
+<details>
+<summary>BibTeX</summary>
 
 ```bibtex
 @article{wang2022squality,
@@ -155,13 +180,16 @@ Wang, A., Pang, R. Y., Chen, A., Phang, J., & Bowman, S. R. (2022). *SQuALITY: B
 
 </details>
 
+---
+
 ### MS MARCO (Concise QA)
 
-This is a massive dataset of real user queries from Bing, along with passages from web documents that are relevant to those queries.
+Real user queries from Bing paired with relevant web passages. Useful for concise QA tasks.
 
 Nguyen, T., Rosenberg, M., Song, X., Gao, J., Tiwary, S., Majumder, R., & Deng, L. (2016). *MS MARCO: A Human Generated Machine Reading Comprehension Dataset*.
 
-<details><summary>BibTeX</summary>
+<details>
+<summary>BibTeX</summary>
 
 ```bibtex
 @inproceedings{nguyen2016msmarco,
@@ -175,13 +203,16 @@ Nguyen, T., Rosenberg, M., Song, X., Gao, J., Tiwary, S., Majumder, R., & Deng, 
 
 </details>
 
-### QMSum
+---
 
-This dataset is for specifically taking in transcripts and answering questions about them. The GitHub repo for the dataset [and other details is here](https://github.com/Yale-LILY/QMSum).
+### QMSum (Query-based Meeting Summarization)
+
+Transcript QA dataset sourced from meetings. [GitHub](https://github.com/Yale-LILY/QMSum)
 
 Zhong, M., Yin, D., Yu, T., Zaidi, A., Mutuma, M., Jha, R., Awadallah, A. H., Celikyilmaz, A., Liu, Y., Qiu, X., & Radev, D. (2021). *QMSum: A New Benchmark for Query-based Multi-domain Meeting Summarization*. NAACL 2021. [https://arxiv.org/abs/2104.05938](https://arxiv.org/abs/2104.05938)
 
-<details><summary>BibTeX</summary>
+<details>
+<summary>BibTeX</summary>
 
 ```bibtex
 @inproceedings{zhong2021qmsum,
@@ -193,6 +224,8 @@ Zhong, M., Yin, D., Yu, T., Zaidi, A., Mutuma, M., Jha, R., Awadallah, A. H., Ce
 ```
 
 </details>
+
+---
 
 ## License
 

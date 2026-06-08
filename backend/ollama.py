@@ -28,8 +28,8 @@ def build_prompt(title: Optional[str], text: str) -> str:
     return (
         f"{instructions}\n"
         "Do not add opinions, commentary, or filler phrases like 'The article discusses' or 'This document provides'.\n"
-        "or any similar phrasing, whether the similarity be in meaning or otherwise. Get straight to the point."
-        "Output the summary sentence only. The sentence should be no longer than 200 characetrs long. Nothing else should be included.\n\n"
+        "or any similar phrasing, whether the similarity be in meaning or otherwise. Get straight to the point. "
+        "Output the summary sentence only. The sentence should be no longer than 200 characters long. Nothing else should be included.\n\n"
         f"Article:\n{text}\n\n"
         "Summary:"
     )

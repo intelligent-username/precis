@@ -27,9 +27,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy frontend
-COPY frontend ./frontend
-WORKDIR /app/frontend
-RUN npm install && npm run build
+# COPY frontend ./frontend
+# WORKDIR /app/frontend
+# RUN npm install && npm run build
 
 # Copy backend
 WORKDIR /app

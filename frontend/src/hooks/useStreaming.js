@@ -103,11 +103,19 @@ export function useStreaming() {
 
             setResponse({ summary, success: true, source_type: activeTab, model: selectedModel })
         } catch (err) {
+            if (err.name === 'AbortError') {
+                // User cancelled — clear loading silently, keep any partial text
+                return
+            }
             setError(err.message || 'An error occurred')
         } finally {
             setLoading(false)
         }
     }
 
-    return { loading, response, error, streamingText, submit }
+    const cancel = () => {
+        abortRef.current?.abort()
+    }
+
+    return { loading, response, error, streamingText, submit, cancel }
 }

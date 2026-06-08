@@ -1,5 +1,5 @@
 """
-Précis — Model loading, configuration, and fine-tuning utilities.
+Model loading, configuration, and fine-tuning utilities.
 """
 
 from src.config import ModelConfig, TrainingConfig, DataConfig

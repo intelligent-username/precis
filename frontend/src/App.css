@@ -70,6 +70,19 @@
   cursor: not-allowed;
 }
 
+/* Model warm-up border states */
+.model-select--ready {
+  border-color: rgba(46, 160, 67, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(46, 160, 67, 0.15);
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+
+.model-select--warming {
+  border-color: rgba(234, 179, 8, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.12);
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+
 /* Main content */
 .main {
   flex: 1;
@@ -220,10 +233,33 @@
 /* Submit section */
 .submit-section {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--spacing-2);
   padding-top: var(--spacing-4);
   border-top: 1px solid var(--color-border-muted);
   margin-top: var(--spacing-4);
+}
+
+/* Cancel / stop button */
+.btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  background-color: rgba(248, 81, 73, 0.08);
+  color: var(--color-danger-fg);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn-cancel:hover {
+  background-color: rgba(248, 81, 73, 0.16);
+  border-color: rgba(248, 81, 73, 0.6);
 }
 
 /* Response section */
@@ -374,29 +410,129 @@
   width: 100%;
 }
 
+/* ── Prose styles for ReactMarkdown output ── */
 .inline-result__text {
   font-size: 14px;
   line-height: 1.7;
   color: var(--color-fg-default);
   margin: 0;
+  width: 100%;
 }
 
-.inline-result__text strong {
+/* Paragraphs */
+.inline-result__text p {
+  margin: 0 0 0.6em;
+}
+.inline-result__text p:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings */
+.inline-result__text h1,
+.inline-result__text h2,
+.inline-result__text h3,
+.inline-result__text h4,
+.inline-result__text h5,
+.inline-result__text h6 {
   font-weight: 600;
+  line-height: 1.3;
+  margin: 0.9em 0 0.35em;
   color: var(--color-fg-default);
 }
+.inline-result__text h1 { font-size: 1.35em; }
+.inline-result__text h2 { font-size: 1.2em; }
+.inline-result__text h3 { font-size: 1.08em; }
+.inline-result__text h4,
+.inline-result__text h5,
+.inline-result__text h6 { font-size: 1em; }
+.inline-result__text h1:first-child,
+.inline-result__text h2:first-child,
+.inline-result__text h3:first-child { margin-top: 0; }
 
-.inline-result__text em {
+/* Lists — top-level */
+.inline-result__text ul,
+.inline-result__text ol {
+  margin: 0.4em 0 0.6em;
+  padding-left: 1.5em;
+}
+.inline-result__text ul { list-style-type: disc; }
+.inline-result__text ol { list-style-type: decimal; }
+
+/* Nested lists — level 2 */
+.inline-result__text ul ul,
+.inline-result__text ol ul { list-style-type: circle; }
+.inline-result__text ul ol,
+.inline-result__text ol ol { list-style-type: lower-alpha; }
+.inline-result__text ul ul,
+.inline-result__text ol ul,
+.inline-result__text ul ol,
+.inline-result__text ol ol {
+  margin: 0.15em 0;
+  padding-left: 1.4em;
+}
+
+/* Nested lists — level 3+ */
+.inline-result__text ul ul ul,
+.inline-result__text ol ul ul { list-style-type: square; }
+.inline-result__text ul ul ul,
+.inline-result__text ol ol ol,
+.inline-result__text ul ol ul,
+.inline-result__text ol ul ol {
+  margin: 0.1em 0;
+  padding-left: 1.3em;
+}
+
+.inline-result__text li {
+  margin: 0.2em 0;
+}
+.inline-result__text li > p { margin: 0; }
+
+/* Inline emphasis */
+.inline-result__text strong { font-weight: 600; }
+.inline-result__text em { font-style: italic; }
+
+/* Blockquote */
+.inline-result__text blockquote {
+  margin: 0.6em 0;
+  padding: 0.3em 0 0.3em 0.9em;
+  border-left: 3px solid var(--color-border-default);
+  color: var(--color-fg-muted);
   font-style: italic;
 }
 
+/* Inline code */
 .inline-result__text code {
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
   background-color: var(--color-canvas-inset);
   border: 1px solid var(--color-border-muted);
   border-radius: 3px;
-  padding: 0 4px;
+  padding: 0.1em 0.35em;
+}
+
+/* Fenced code blocks */
+.inline-result__text pre {
+  background-color: var(--color-canvas-inset);
+  border: 1px solid var(--color-border-muted);
+  border-radius: 6px;
+  padding: 0.75em 1em;
+  margin: 0.6em 0;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.inline-result__text pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Horizontal rule */
+.inline-result__text hr {
+  border: none;
+  border-top: 1px solid var(--color-border-muted);
+  margin: 0.8em 0;
 }
 
 /* Streaming cursor blink */

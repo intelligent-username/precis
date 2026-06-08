@@ -1,5 +1,6 @@
 """
-Clean up the raw data files so as to curate specifically-required 
+Clean up the raw data files so as to curate specifically-required
+* Imports cleaners from the scripts/ folder
 """
 
 import subprocess

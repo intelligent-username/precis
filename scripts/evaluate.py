@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI evaluation script for Précis."""
+"""CLI evaluation script for the models"""
 
 import argparse
 import logging

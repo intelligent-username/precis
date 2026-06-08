@@ -1,5 +1,7 @@
 from typing import Optional
 
+import os
+
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,7 +34,6 @@ app.add_middleware(
 )
 
 # Only mount frontend in production when dist/ exists
-import os
 if os.path.isdir("frontend/dist"):
     app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
@@ -99,6 +100,53 @@ async def list_models():
         pass
 
     return {"default": DEFAULT_MODEL, "available": AVAILABLE_MODELS}
+
+
+@app.post("/warmup")
+async def warmup_model(model: Optional[str] = None):
+    """Load a model into Ollama VRAM.
+
+    Per the Ollama API docs: sending a generate request with an empty
+    prompt (no 'prompt' key at all) causes Ollama to load the model into
+    memory and return once it is ready.  stream=False means this endpoint
+    only returns *after* the model is fully loaded — the frontend can await
+    it to know exactly when the model is warm.
+    """
+    keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+    target = model or DEFAULT_MODEL
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            await client.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json={"model": target, "keep_alive": keep_alive, "stream": False},
+            )
+    except Exception:
+        pass  # Non-fatal
+    return {"model": target, "status": "warmed"}
+
+
+@app.get("/warmup/status")
+async def warmup_status(model: Optional[str] = None):
+    """Check whether a model is currently loaded in Ollama's memory.
+
+    Hits GET /api/ps (the equivalent of `ollama ps`) and returns
+    {"loaded": true/false, "model": name}.
+    """
+    target = model or DEFAULT_MODEL
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{OLLAMA_BASE_URL}/api/ps")
+            r.raise_for_status()
+            payload = r.json() if r.content else {}
+            running = [m.get("name", "") for m in payload.get("models", [])]
+            # Match on exact name or prefix (e.g. "phi4-mini" matches "phi4-mini:latest")
+            loaded = any(
+                name == target or name.startswith(target + ":")
+                for name in running
+            )
+            return {"model": target, "loaded": loaded}
+    except Exception:
+        return {"model": target, "loaded": False}
 
 
 @app.post("/summarize/transcript")

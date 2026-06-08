@@ -18,14 +18,16 @@ export default function InlineResult({ error, loading, response, streamingText, 
                         {streamingText ? 'Generating…' : (loadingLabel || 'Processing…')}
                         <span className="response-badge" style={{ marginLeft: 'auto' }}>{selectedModel}</span>
                     </div>
-                    <p className="inline-result__text">
-                        {streamingText || (
+                    <div className="inline-result__text inline-result__text--streaming">
+                        {streamingText ? (
+                            <ReactMarkdown>{streamingText}</ReactMarkdown>
+                        ) : (
                             <span className="streaming-placeholder">
                                 {placeholderText || loadingLabel || 'Waiting for model…'}
                             </span>
                         )}
                         <span className="streaming-cursor">▌</span>
-                    </p>
+                    </div>
                 </div>
             )}
             {response && !loading && (
@@ -38,11 +40,7 @@ export default function InlineResult({ error, loading, response, streamingText, 
                         <span className="response-badge" style={{ marginLeft: 'auto' }}>{response.model ?? 'phi4-mini'}</span>
                     </div>
                     <div className="inline-result__text">
-                        <ReactMarkdown
-                            components={{ p: ({ children }) => <span>{children}</span> }}
-                        >
-                            {response.summary}
-                        </ReactMarkdown>
+                        <ReactMarkdown>{response.summary}</ReactMarkdown>
                     </div>
                 </div>
             )}

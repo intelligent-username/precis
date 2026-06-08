@@ -1,4 +1,4 @@
-"""Configuration management for Précis."""
+"""Configuration management."""
 
 from dataclasses import dataclass, field
 from typing import Optional, List

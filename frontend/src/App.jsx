@@ -12,9 +12,11 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [models, setModels] = useState([])
   const [selectedModel, setSelectedModel] = useState('')
+  const [modelReady, setModelReady] = useState(null) // null=unknown, false=warming, true=ready
   const fileInputRef = useRef(null)
+  const warmupAbortRef = useRef(null)
 
-  const { loading, response, error, streamingText, submit } = useStreaming()
+  const { loading, response, error, streamingText, submit, cancel } = useStreaming()
 
   useEffect(() => {
     let cancelled = false
@@ -36,6 +38,58 @@ function App() {
     })()
     return () => { cancelled = true }
   }, [])
+
+  // Warm up the selected model whenever the selection changes.
+  // 1. POST /warmup  — tells Ollama to load the model; only resolves when done.
+  // 2. While waiting, poll GET /warmup/status every 2 s to update the indicator sooner.
+  useEffect(() => {
+    if (!selectedModel) return
+
+    // Cancel any in-flight warmup for the previous model
+    if (warmupAbortRef.current) warmupAbortRef.current.abort()
+    const controller = new AbortController()
+    warmupAbortRef.current = controller
+
+    setModelReady(false)
+
+    // Poll /warmup/status every 2 s until loaded or aborted
+    let pollTimer = null
+    const poll = async () => {
+      if (controller.signal.aborted) return
+      try {
+        const r = await fetch(
+          `${API_BASE}/warmup/status?model=${encodeURIComponent(selectedModel)}`,
+          { signal: controller.signal },
+        )
+        if (r.ok) {
+          const data = await r.json()
+          if (data.loaded) {
+            setModelReady(true)
+            return
+          }
+        }
+      } catch { /* ignore */ }
+      if (!controller.signal.aborted) {
+        pollTimer = setTimeout(poll, 2000)
+      }
+    }
+    poll()
+
+    // POST /warmup — blocks until Ollama has the model in VRAM
+    fetch(`${API_BASE}/warmup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: selectedModel }),
+      signal: controller.signal,
+    })
+      .then(() => { setModelReady(true) })
+      .catch(() => { /* warmup errors are non-fatal */ })
+
+    return () => {
+      controller.abort()
+      clearTimeout(pollTimer)
+    }
+  }, [selectedModel])
 
   const handleSubmit = () =>
     submit(activeTab, {
@@ -74,13 +128,14 @@ function App() {
         </a>
         <div className="header-actions">
           <select
-            className="model-select"
+            className={`model-select${modelReady === true ? ' model-select--ready' : modelReady === false ? ' model-select--warming' : ''}`}
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
             disabled={loading || models.length === 0}
           >
             {models.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
+
           <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer" className="btn" style={{ textDecoration: 'none' }}>
             API Docs
           </a>
@@ -132,7 +187,7 @@ function App() {
                   {activeTab === 'youtube' && (
                     <InlineResult
                       {...resultProps}
-                      loadingLabel="Fetching transcript…"
+                      loadingLabel={streamingText ? 'Generating…' : 'Fetching transcript…'}
                       placeholderText="Fetching transcript…"
                     />
                   )}
@@ -211,6 +266,14 @@ function App() {
                 </div>
 
                 <div className="submit-section">
+                  {loading && (
+                    <button className="btn btn-cancel" onClick={cancel}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      Cancel
+                    </button>
+                  )}
                   <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={loading}>
                     {loading ? (
                       <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Processing...</>

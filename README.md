@@ -10,7 +10,7 @@ app_file: app.py
 pinned: false
 ---
 
-<!-- markdownlint-disable MD025 -->
+
 
 <h1 align="center">Précis</h1>
 

@@ -12,11 +12,10 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [models, setModels] = useState([])
   const [selectedModel, setSelectedModel] = useState('')
-  const [modelReady, setModelReady] = useState(null) // null=unknown, false=warming, true=ready
+  const [modelReady, setModelReady] = useState(null)
   const fileInputRef = useRef(null)
   const warmupAbortRef = useRef(null)
 
-  // One streaming instance per tab — state is fully independent and persists across tab switches
   const ytStreaming = useStreaming()
   const textStreaming = useStreaming()
   const fileStreaming = useStreaming()
@@ -32,33 +31,22 @@ function App() {
         if (!res.ok) return
         const data = await res.json()
         if (cancelled) return
-
         const available = Array.isArray(data.available) ? data.available : []
         setModels(available)
-
         const serverDefault = typeof data.default === 'string' ? data.default : ''
         setSelectedModel((prev) => prev || serverDefault || available[0] || '')
-      } catch {
-        // Non-fatal: model list stays empty; backend will still pick default if model omitted.
-      }
+      } catch { /* non-fatal */ }
     })()
     return () => { cancelled = true }
   }, [])
 
-  // Warm up the selected model whenever the selection changes.
-  // 1. POST /warmup  — tells Ollama to load the model; only resolves when done.
-  // 2. While waiting, poll GET /warmup/status every 2 s to update the indicator sooner.
   useEffect(() => {
     if (!selectedModel) return
-
-    // Cancel any in-flight warmup for the previous model
     if (warmupAbortRef.current) warmupAbortRef.current.abort()
     const controller = new AbortController()
     warmupAbortRef.current = controller
-
     setModelReady(false)
 
-    // Poll /warmup/status every 2 s until loaded or aborted
     let pollTimer = null
     const poll = async () => {
       if (controller.signal.aborted) return
@@ -69,39 +57,26 @@ function App() {
         )
         if (r.ok) {
           const data = await r.json()
-          if (data.loaded) {
-            setModelReady(true)
-            return
-          }
+          if (data.loaded) { setModelReady(true); return }
         }
       } catch { /* ignore */ }
-      if (!controller.signal.aborted) {
-        pollTimer = setTimeout(poll, 2000)
-      }
+      if (!controller.signal.aborted) pollTimer = setTimeout(poll, 2000)
     }
     poll()
 
-    // POST /warmup — blocks until Ollama has the model in VRAM
     fetch(`${API_BASE}/warmup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: selectedModel }),
       signal: controller.signal,
-    })
-      .then(() => { setModelReady(true) })
-      .catch(() => { /* warmup errors are non-fatal */ })
+    }).then(() => setModelReady(true)).catch(() => {})
 
-    return () => {
-      controller.abort()
-      clearTimeout(pollTimer)
-    }
+    return () => { controller.abort(); clearTimeout(pollTimer) }
   }, [selectedModel])
 
   const handleSubmit = () =>
     active.submit(activeTab, {
-      youtubeUrl,
-      transcript,
-      selectedFile,
+      youtubeUrl, transcript, selectedFile,
       selectedModel: selectedModel || undefined,
     })
 
@@ -123,70 +98,58 @@ function App() {
     if (e.key === 'Enter' && e.ctrlKey && !active.loading) handleSubmit()
   }
 
+  const TABS = [
+    { key: 'youtube',     label: 'YouTube' },
+    { key: 'transcript',  label: 'Text' },
+    { key: 'file',        label: 'File' },
+  ]
+
   return (
     <>
-      <header className="header">
-        <a href="/" className="logo">
-          <img src={logoSvg} alt="Précis" className="logo-icon" />
-          <span className="logo-text">Précis</span>
-        </a>
-        <div className="header-actions">
-          <select
-            className={`model-select${modelReady === true ? ' model-select--ready' : modelReady === false ? ' model-select--warming' : ''}`}
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={active.loading || models.length === 0}
-          >
-            {models.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-
-          <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer" className="btn" style={{ textDecoration: 'none' }}>
-            API Docs
-          </a>
-        </div>
-      </header>
-
+      {/* ── Main ── */}
       <main className="main">
         <div className="container">
-          <div className="upload-section fade-in">
-            <h1 className="page-title">Summarize Content</h1>
-            <p className="page-subtitle">
-              Upload a YouTube video, paste a transcript, or drop a text file to generate a summary.
-            </p>
+          <div className="content-layout">
 
-            <div className="upload-card">
-              <div className="upload-header">
-                <div className="upload-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  Upload Content
-                </div>
+            {/* Hero strip */}
+            <div className="hero">
+              <div className="logo hero-logo">
+                <img src={logoSvg} alt="" className="logo-icon" />
+                <span className="logo-text">Précis</span>
+              </div>
+            </div>
+
+            {/* Card */}
+            <div className="card-wrap fade-in">
+
+              {/* Segmented tab control */}
+              <div className="seg-control">
+                {TABS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    className={`seg-btn${activeTab === key ? ' seg-btn--active' : ''}`}
+                    onClick={() => setActiveTab(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
-              <div className="upload-body">
-                <div className="tabs">
-                  {[['youtube', 'YouTube Video'], ['transcript', 'Article / Transcript'], ['file', 'Text File']].map(([key, label]) => (
-                    <button key={key} className={`tab ${activeTab === key ? 'active' : ''}`} onClick={() => setActiveTab(key)}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              {/* Panels */}
+              <div className="panels">
 
                 {/* YouTube */}
-                <div className={`tab-panel ${activeTab === 'youtube' ? 'active' : ''}`}>
-                  <div className="form-group">
-                    <label className="form-label">YouTube URL</label>
+                <div className={`panel${activeTab === 'youtube' ? ' panel--active' : ''}`}>
+                  <div className="field">
+                    <label className="field-label">YouTube URL</label>
                     <input
-                      type="url" className="input"
-                      placeholder="https://www.youtube.com/watch?v=..."
+                      type="url"
+                      className="input input--lg"
+                      placeholder="https://www.youtube.com/watch?v=…"
                       value={youtubeUrl}
                       onChange={(e) => setYoutubeUrl(e.target.value)}
                       onKeyDown={ctrlEnter}
                     />
-                    <p className="form-hint">Paste a YouTube URL. Ctrl+Enter to generate.</p>
                   </div>
                   <InlineResult
                     error={ytStreaming.error}
@@ -199,24 +162,17 @@ function App() {
                   />
                 </div>
 
-                {/* Transcript */}
-                <div className={`tab-panel ${activeTab === 'transcript' ? 'active' : ''}`}>
-                  <div className="form-group">
-                    <label className="form-label">Article or Transcript Text</label>
+                {/* Text / Transcript */}
+                <div className={`panel${activeTab === 'transcript' ? ' panel--active' : ''}`}>
+                  <div className="field">
+                    <label className="field-label">Article or transcript</label>
                     <textarea
                       className="textarea"
-                      placeholder="Paste your article or transcript here..."
+                      placeholder="Paste your article or transcript here…"
                       value={transcript}
                       onChange={(e) => setTranscript(e.target.value)}
                       onKeyDown={ctrlEnter}
                     />
-                    <p className="form-hint">
-                      Paste any text you want to summarize.{' '}
-                      <kbd style={{ fontFamily: 'inherit', background: 'var(--color-canvas-inset)', border: '1px solid var(--color-border-muted)', borderRadius: 3, padding: '0 4px', fontSize: 11 }}>Ctrl</kbd>
-                      {' + '}
-                      <kbd style={{ fontFamily: 'inherit', background: 'var(--color-canvas-inset)', border: '1px solid var(--color-border-muted)', borderRadius: 3, padding: '0 4px', fontSize: 11 }}>Enter</kbd>
-                      {' '}to generate.
-                    </p>
                   </div>
                   <InlineResult
                     error={textStreaming.error}
@@ -229,35 +185,37 @@ function App() {
                   />
                 </div>
 
-                {/* File upload */}
-                <div className={`tab-panel ${activeTab === 'file' ? 'active' : ''}`}>
-                  <div className="form-group">
-                    <label className="form-label">Text File (.txt)</label>
-                    <div className="dropzone" onClick={() => fileInputRef.current?.click()} onDrop={handleFileDrop} onDragOver={(e) => e.preventDefault()}>
-                      <svg className="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                {/* File */}
+                <div className={`panel${activeTab === 'file' ? ' panel--active' : ''}`}>
+                  <div className="field">
+                    <label className="field-label">Text file <span className="field-label-hint">(.txt)</span></label>
+                    <div
+                      className="dropzone"
+                      onClick={() => fileInputRef.current?.click()}
+                      onDrop={handleFileDrop}
+                      onDragOver={(e) => e.preventDefault()}
+                    >
+                      <svg className="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
                         <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      <p className="dropzone-text">Drag and drop a <strong>.txt</strong> file here, or click to browse</p>
-                      <p className="dropzone-hint">Maximum file size: 10 MB</p>
+                      <span className="dropzone-label">.txt</span>
                     </div>
-                    <input ref={fileInputRef} type="file" className="file-input" accept=".txt" onChange={handleFileDrop} />
+                    <input ref={fileInputRef} type="file" style={{ display: 'none' }} accept=".txt" onChange={handleFileDrop} />
 
                     {selectedFile && (
-                      <div className="file-selected">
-                        <div className="file-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                          </svg>
-                        </div>
-                        <div className="file-info">
-                          <div className="file-name">{selectedFile.name}</div>
-                          <div className="file-size">{formatFileSize(selectedFile.size)}</div>
-                        </div>
-                        <button className="file-remove" onClick={(e) => { e.stopPropagation(); setSelectedFile(null) }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <div className="file-chip">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        <span className="file-chip__name">{selectedFile.name}</span>
+                        <span className="file-chip__size">{formatFileSize(selectedFile.size)}</span>
+                        <button
+                          className="file-chip__remove"
+                          onClick={(e) => { e.stopPropagation(); setSelectedFile(null) }}
+                          aria-label="Remove file"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                           </svg>
                         </button>
@@ -274,37 +232,58 @@ function App() {
                     placeholderText="Reading file…"
                   />
                 </div>
-
-                <div className="submit-section">
-                  {active.loading && (
-                    <button className="btn btn-cancel" onClick={active.cancel}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                      Cancel
-                    </button>
-                  )}
-                  <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={active.loading}>
-                    {active.loading ? (
-                      <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Processing...</>
-                    ) : (
-                      <>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4L22 2z" />
-                        </svg>
-                        Generate Summary
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
+
+              {/* Action row */}
+              <div className="action-row">
+                {active.loading && (
+                  <button className="btn btn-cancel" onClick={active.cancel}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    Cancel
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary btn-generate"
+                  onClick={handleSubmit}
+                  disabled={active.loading}
+                >
+                  {active.loading ? (
+                    <><span className="loading-spinner" style={{ width: 15, height: 15 }} /> Processing…</>
+                  ) : (
+                    <>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4L22 2z" />
+                      </svg>
+                      Generate
+                    </>
+                  )}
+                </button>
+                <span className="action-hint">or <kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+              </div>
+
             </div>
+
+            {/* Model Selector at bottom right, outside card-wrap */}
+            <div className="model-selector-wrap">
+              <select
+                className={`model-select${modelReady === true ? ' model-select--ready' : modelReady === false ? ' model-select--warming' : ''}`}
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={active.loading || models.length === 0}
+              >
+                {models.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+
           </div>
         </div>
       </main>
 
       <footer className="footer">
-        <p>Précis © 2026 · <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer">API Documentation</a></p>
+        <span className="footer-sep">·</span>
+        <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer">API Docs</a>
       </footer>
     </>
   )

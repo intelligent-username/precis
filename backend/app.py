@@ -15,7 +15,7 @@ from config import (
     API_KEY,
     MAX_UPLOAD_BYTES,
 )
-from schemas import TranscriptRequest, YouTubeRequest
+from schemas import TranscriptRequest, YouTubeRequest, UnloadRequest
 from ollama import stream_summary
 from helpers.transcript import transcript as fetch_yt_transcript
 
@@ -93,13 +93,24 @@ async def list_models():
             r.raise_for_status()
             payload = r.json() if r.content else {}
             installed = [m.get("name") for m in payload.get("models", []) if m.get("name")]
+            
+            # Fetch currently running/loaded models
+            running = []
+            try:
+                ps_r = await client.get(f"{OLLAMA_BASE_URL}/api/ps")
+                if ps_r.status_code == 200:
+                    ps_payload = ps_r.json() if ps_r.content else {}
+                    running = [m.get("name") for m in ps_payload.get("models", []) if m.get("name")]
+            except Exception:
+                pass
+
             if installed:
                 default = DEFAULT_MODEL if DEFAULT_MODEL in installed else installed[0]
-                return {"default": default, "available": installed}
+                return {"default": default, "available": installed, "running": running}
     except Exception:
         pass
 
-    return {"default": DEFAULT_MODEL, "available": AVAILABLE_MODELS}
+    return {"default": DEFAULT_MODEL, "available": AVAILABLE_MODELS, "running": []}
 
 
 @app.post("/warmup")
@@ -109,7 +120,7 @@ async def warmup_model(model: Optional[str] = None):
     Per the Ollama API docs: sending a generate request with an empty
     prompt (no 'prompt' key at all) causes Ollama to load the model into
     memory and return once it is ready.  stream=False means this endpoint
-    only returns *after* the model is fully loaded — the frontend can await
+    only returns *after* the model is fully loaded.
     it to know exactly when the model is warm.
     """
     keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
@@ -147,6 +158,39 @@ async def warmup_status(model: Optional[str] = None):
             return {"model": target, "loaded": loaded}
     except Exception:
         return {"model": target, "loaded": False}
+
+
+@app.post("/unload")
+async def unload_model(request: UnloadRequest):
+    """Unload a model from Ollama VRAM by sending keep_alive: 0.
+    If no model is specified, it unloads all currently loaded models.
+    """
+    targets = []
+    if request.model:
+        targets.append(request.model)
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(f"{OLLAMA_BASE_URL}/api/ps")
+                if r.status_code == 200:
+                    payload = r.json() if r.content else {}
+                    targets = [m.get("name") for m in payload.get("models", []) if m.get("name")]
+        except Exception:
+            pass
+
+    unloaded = []
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for target in targets:
+            try:
+                await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={"model": target, "keep_alive": 0, "stream": False},
+                )
+                unloaded.append(target)
+            except Exception:
+                pass
+    return {"unloaded": unloaded}
+
 
 
 @app.post("/summarize/transcript")

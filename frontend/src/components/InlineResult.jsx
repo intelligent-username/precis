@@ -42,6 +42,7 @@ export default function InlineResult({ error, loading, response, streamingText, 
                         )}
                         <span className="response-badge" style={{ marginLeft: 'auto' }}>{response.model ?? selectedModel}</span>
                     </div>
+
                     <div className="inline-result__text">
                         <ReactMarkdown>{response.summary}</ReactMarkdown>
                     </div>

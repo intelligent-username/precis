@@ -6,6 +6,7 @@ export function useStreaming() {
     const [response, setResponse] = useState(null)
     const [error, setError] = useState(null)
     const [streamingText, setStreamingText] = useState('')
+    const [isGenerating, setIsGenerating] = useState(false)
     const abortRef = useRef(null)
     // Tracks accumulated text in real-time so cancel() can save it as a response
     const accumulatedRef = useRef('')
@@ -81,6 +82,7 @@ export function useStreaming() {
             throw new Error(detail)
         }
 
+        setIsGenerating(true)
         return readNDJSONStream(res)
     }
 
@@ -94,6 +96,7 @@ export function useStreaming() {
         setError(null)
         setResponse(null)
         setStreamingText('')
+        setIsGenerating(false)
         accumulatedRef.current = ''
 
         try {
@@ -115,22 +118,29 @@ export function useStreaming() {
             if (submitIdRef.current !== myId) return  // superseded by a newer submit
             setResponse({ summary, success: true, source_type: activeTab, model: selectedModel })
         } catch (err) {
-            if (submitIdRef.current !== myId) return  // superseded — don't touch state
+            if (submitIdRef.current !== myId) return  // superseded: don't touch state
             if (err.name === 'AbortError') {
-                // User cancelled — keep whatever was generated so far as the result
+                // User cancelled: keep whatever was generated so far as the result
                 const partial = accumulatedRef.current.trim()
                 if (partial) {
-                    setResponse({ summary: partial, success: true, source_type: activeTab, model: selectedModel, cancelled: true })
+                    setResponse({
+                        summary: partial,
+                        success: true,
+                        source_type: activeTab,
+                        model: selectedModel,
+                        cancelled: true
+                    })
                 }
                 // If nothing was generated yet, just reset silently (no error shown)
                 return
             }
             setError(err.message || 'An error occurred')
         } finally {
-            // Only the current submit should clear loading — stale ones must not interfere
+            // Only the current submit should clear loading: stale ones must not interfere
             if (submitIdRef.current === myId) {
                 setLoading(false)
                 setStreamingText('')
+                setIsGenerating(false)
             }
         }
     }
@@ -139,5 +149,5 @@ export function useStreaming() {
         abortRef.current?.abort()
     }
 
-    return { loading, response, error, streamingText, submit, cancel }
+    return { loading, response, error, streamingText, isGenerating, submit, cancel }
 }

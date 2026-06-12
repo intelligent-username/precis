@@ -248,10 +248,18 @@
 .action-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
-  padding: 20px 32px;
+  padding: 12px 24px;
   border-top: 1px solid var(--color-border-muted);
-  margin-top: var(--spacing-4);
+  margin-top: var(--spacing-3);
+}
+
+.generate-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .btn-generate {
@@ -262,18 +270,18 @@
 }
 
 .action-hint {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--color-fg-subtle);
-  margin-left: auto;
+  margin: 0;
 }
 
 .action-hint kbd {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 9px;
   background: var(--color-canvas-inset);
   border: 1px solid var(--color-border-muted);
   border-radius: 4px;
-  padding: 0 5px;
+  padding: 0 4px;
   color: var(--color-fg-muted);
 }
 
@@ -495,10 +503,76 @@
 
 .footer a:hover { color: var(--color-fg-muted); }
 
-/* ─── Fade-in ────────────────────────────────────────────── */
+/* Fade-in */
 .fade-in { animation: fadeUp 0.25s ease-out both; }
 
-/* ─── Media Queries (Mobile Friendly) ────────────────────── */
+/* Tooltips (Desktop Only) */
+@media (hover: hover) and (min-width: 769px) {
+  [data-tooltip] {
+    position: relative;
+  }
+
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background-color: #24292f;
+    color: #ffffff;
+    font-size: 11px;
+    font-family: var(--font-family-sans);
+    font-weight: 500;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    z-index: 100;
+  }
+
+  [data-tooltip]::before {
+    content: "";
+    position: absolute;
+    bottom: 115%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #24292f transparent transparent transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    z-index: 100;
+  }
+
+  [data-tooltip]:hover::after,
+  [data-tooltip]:hover::before {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Align Generate tooltip to the right edge to prevent card overflow clipping */
+  .btn-generate[data-tooltip]::after {
+    left: auto;
+    right: 0;
+    transform: translateY(4px);
+  }
+  .btn-generate[data-tooltip]::before {
+    left: auto;
+    right: 20px;
+    transform: translateY(4px);
+  }
+  .btn-generate[data-tooltip]:hover::after,
+  .btn-generate[data-tooltip]:hover::before {
+    transform: translateY(0);
+  }
+}
+
+/* Media Queries (Mobile Friendly) */
 @media (max-width: 768px) {
   .logo {
     gap: 16px;

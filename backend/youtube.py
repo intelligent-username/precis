@@ -23,7 +23,7 @@ def extract_video_id(url: str) -> str:
 
 
 def fetch_transcript(video_id: str) -> str:
-    """Synchronous transcript fetch — call via asyncio.to_thread."""
+    """Synchronous transcript fetch. Call via asyncio.to_thread."""
     ytt = YouTubeTranscriptApi()
     try:
         transcript = ytt.fetch(video_id, languages=["en", "en-US", "en-GB"])

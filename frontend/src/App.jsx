@@ -23,25 +23,38 @@ function App() {
   const streaming = { youtube: ytStreaming, transcript: textStreaming, file: fileStreaming }
   const active = streaming[activeTab]
 
+  const [runningModels, setRunningModels] = useState([])
+  const isMounted = useRef(true)
+  const prevModelRef = useRef(null)
+
+  const fetchModels = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/models`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (!isMounted.current) return
+      const available = Array.isArray(data.available) ? data.available : []
+      const running = Array.isArray(data.running) ? data.running : []
+      setModels(available)
+      setRunningModels(running)
+      const serverDefault = typeof data.default === 'string' ? data.default : ''
+      setSelectedModel((prev) => prev || serverDefault || available[0] || '')
+    } catch { /* non-fatal */ }
+  }
+
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/models`)
-        if (!res.ok) return
-        const data = await res.json()
-        if (cancelled) return
-        const available = Array.isArray(data.available) ? data.available : []
-        setModels(available)
-        const serverDefault = typeof data.default === 'string' ? data.default : ''
-        setSelectedModel((prev) => prev || serverDefault || available[0] || '')
-      } catch { /* non-fatal */ }
-    })()
-    return () => { cancelled = true }
+    isMounted.current = true
+    fetchModels()
+    const interval = setInterval(fetchModels, 10000)
+    return () => {
+      isMounted.current = false
+      clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {
     if (!selectedModel) return
+
     if (warmupAbortRef.current) warmupAbortRef.current.abort()
     const controller = new AbortController()
     warmupAbortRef.current = controller
@@ -62,14 +75,32 @@ function App() {
       } catch { /* ignore */ }
       if (!controller.signal.aborted) pollTimer = setTimeout(poll, 2000)
     }
-    poll()
 
-    fetch(`${API_BASE}/warmup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: selectedModel }),
-      signal: controller.signal,
-    }).then(() => setModelReady(true)).catch(() => {})
+    const startSequence = async () => {
+      if (prevModelRef.current && prevModelRef.current !== selectedModel) {
+        try {
+          await fetch(`${API_BASE}/unload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: prevModelRef.current }),
+            signal: controller.signal,
+          })
+          fetchModels()
+        } catch { /* ignore */ }
+      }
+      prevModelRef.current = selectedModel
+
+      poll()
+
+      fetch(`${API_BASE}/warmup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selectedModel }),
+        signal: controller.signal,
+      }).then(() => setModelReady(true)).catch(() => {})
+    }
+
+    startSequence()
 
     return () => { controller.abort(); clearTimeout(pollTimer) }
   }, [selectedModel])
@@ -94,9 +125,38 @@ function App() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  const ctrlEnter = (e) => {
-    if (e.key === 'Enter' && e.ctrlKey && !active.loading) handleSubmit()
-  }
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl + Enter to generate
+      if (e.ctrlKey && e.key === 'Enter') {
+        if (!active.loading) {
+          e.preventDefault()
+          handleSubmit()
+        }
+      }
+      // Ctrl + Alt + C to copy YouTube URL
+      if (e.ctrlKey && e.altKey && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault()
+        if (youtubeUrl) {
+          navigator.clipboard.writeText(youtubeUrl).catch(() => {})
+        }
+        return
+      }
+
+      // Ctrl + C to cancel (only when loading, and no text selected)
+      if (e.ctrlKey && !e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+        if (active.loading) {
+          const selection = window.getSelection()?.toString()
+          if (!selection) {
+            e.preventDefault()
+            active.cancel()
+          }
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [active, handleSubmit])
 
   const TABS = [
     { key: 'youtube',     label: 'YouTube' },
@@ -148,7 +208,6 @@ function App() {
                       placeholder="https://www.youtube.com/watch?v=…"
                       value={youtubeUrl}
                       onChange={(e) => setYoutubeUrl(e.target.value)}
-                      onKeyDown={ctrlEnter}
                     />
                   </div>
                   <InlineResult
@@ -157,8 +216,8 @@ function App() {
                     response={ytStreaming.response}
                     streamingText={ytStreaming.streamingText}
                     selectedModel={selectedModel}
-                    loadingLabel={ytStreaming.streamingText ? 'Generating…' : 'Fetching transcript…'}
-                    placeholderText="Fetching transcript…"
+                    loadingLabel={ytStreaming.isGenerating ? 'Generating…' : 'Fetching transcript…'}
+                    placeholderText={ytStreaming.isGenerating ? 'Waiting for model…' : 'Fetching transcript…'}
                   />
                 </div>
 
@@ -171,7 +230,6 @@ function App() {
                       placeholder="Paste your article or transcript here…"
                       value={transcript}
                       onChange={(e) => setTranscript(e.target.value)}
-                      onKeyDown={ctrlEnter}
                     />
                   </div>
                   <InlineResult
@@ -228,8 +286,8 @@ function App() {
                     response={fileStreaming.response}
                     streamingText={fileStreaming.streamingText}
                     selectedModel={selectedModel}
-                    loadingLabel="Reading file…"
-                    placeholderText="Reading file…"
+                    loadingLabel={fileStreaming.isGenerating ? 'Generating…' : 'Reading file…'}
+                    placeholderText={fileStreaming.isGenerating ? 'Waiting for model…' : 'Reading file…'}
                   />
                 </div>
               </div>
@@ -237,30 +295,37 @@ function App() {
               {/* Action row */}
               <div className="action-row">
                 {active.loading && (
-                  <button className="btn btn-cancel" onClick={active.cancel}>
+                  <button className="btn btn-cancel" onClick={active.cancel} data-tooltip="Ctrl + C">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                     Cancel
                   </button>
                 )}
-                <button
-                  className="btn btn-primary btn-generate"
-                  onClick={handleSubmit}
-                  disabled={active.loading}
-                >
-                  {active.loading ? (
-                    <><span className="loading-spinner" style={{ width: 15, height: 15 }} /> Processing…</>
-                  ) : (
-                    <>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4L22 2z" />
-                      </svg>
-                      Generate
-                    </>
-                  )}
-                </button>
-                <span className="action-hint">or <kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+                <div className="generate-wrapper">
+                  <button
+                    className="btn btn-primary btn-generate"
+                    onClick={handleSubmit}
+                    disabled={active.loading}
+                    data-tooltip="Ctrl + Enter"
+                  >
+                    {active.loading ? (
+                      <><span className="loading-spinner" style={{ width: 15, height: 15 }} /> Processing…</>
+                    ) : (
+                      <>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4L22 2z" />
+                        </svg>
+                        Generate
+                      </>
+                    )}
+                  </button>
+                  <span className="action-hint">
+                    {!active.loading && (
+                      <>or <kbd>Ctrl</kbd>+<kbd>Enter</kbd></>
+                    )}
+                  </span>
+                </div>
               </div>
 
             </div>
@@ -271,9 +336,19 @@ function App() {
                 className={`model-select${modelReady === true ? ' model-select--ready' : modelReady === false ? ' model-select--warming' : ''}`}
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
+                onFocus={fetchModels}
                 disabled={active.loading || models.length === 0}
               >
-                {models.map((m) => <option key={m} value={m}>{m}</option>)}
+                {models.map((m) => {
+                  const isRunning = runningModels.some(
+                    (r) => r === m || r.startsWith(m + ':') || m.startsWith(r + ':')
+                  )
+                  return (
+                    <option key={m} value={m}>
+                      {m}{isRunning ? ' (active)' : ''}
+                    </option>
+                  )
+                })}
               </select>
             </div>
 

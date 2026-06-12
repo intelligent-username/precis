@@ -76,7 +76,7 @@ Scripts live in `scripts/`. The project has been tested primarily with **phi4-mi
 
 ```bash
 ollama pull phi4-mini:latest
-ollama pull qwen3:4b
+ollama pull llama3.1:latest
 ```
 
 ---

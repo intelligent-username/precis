@@ -56,7 +56,7 @@ def _extract_video_id(url: str) -> str:
 
 
 def _fetch_transcript_sync(video_id: str) -> str:
-    """Blocking transcript fetch — always call via ``asyncio.to_thread``."""
+    """Blocking transcript fetch. Always call via ``asyncio.to_thread``."""
     ytt = YouTubeTranscriptApi()
     try:
         t = ytt.fetch(video_id, languages=_LANG_PREFS)
@@ -117,7 +117,7 @@ async def transcript(url: str) -> tuple[Optional[str], str]:
     video_id = _extract_video_id(url)
 
     # Run the blocking transcript fetch in a thread while the async title
-    # fetch runs on the event loop — both in parallel.
+    # fetch runs on the event loop (parallel).
     title_task = asyncio.create_task(_fetch_title(video_id))
     text = await asyncio.to_thread(_fetch_transcript_sync, video_id)
 

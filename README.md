@@ -50,16 +50,23 @@ All `/summarize/*` endpoints accept an optional `model` field to override the de
 
 ---
 
-## Quick Start (Docker)
+## Quick Start (Docker) — Host Ollama, GPU Fast
 
-**One command** to build and run the whole stack (API + frontend + Ollama). This is the main way to run Précis — no manual `ollama serve`/`uvicorn`/`vite` needed.
+**Host Ollama (Option A) is now the ONLY supported Docker setup.** No Ollama container, no 2.5GB re-download, no 600% CPU. Docker only runs `api` (FastAPI + baked frontend) + `frontend` (Vite HMR). Ollama runs natively on the host for full GPU speed.
 
 > **Python runs inside the `precis` conda environment** — same as your local setup. The `Dockerfile` uses `continuumio/miniconda3` + `environment.yml` to create `conda env precis` (Python 3.11) and installs all deps there; the container's `PATH` points to `/opt/conda/envs/precis/bin`, so `uvicorn` runs from `precis`.
 
 ### 1. Prerequisites
 
 - **Docker** + **Docker Compose** ([Install Docker Desktop](https://docs.docker.com/get-docker/))
-- That's it. Python (via `precis` conda env), Node, and Ollama are all inside the containers. No local conda/Python/Node needed.
+- **Ollama (host, native)** — [Install Ollama](https://ollama.com/download) + at least one model:
+  ```bash
+  ollama pull phi4-mini:latest
+  # optional extras:
+  ollama pull qwen3:4b
+  ollama list
+  ```
+- That's it. Python (via `precis` conda env) and Node are inside the containers. No local conda/Python/Node needed for Docker path.
 
 ### 2. Configure
 
@@ -71,39 +78,46 @@ cp .env.example .env
 # VITE_API_KEY must match PRECIS_API_KEY so the baked frontend can auth
 ```
 
-> **`.env.example` defaults for Docker:**
+> **`.env.example` defaults for Docker (host Ollama):**
 > ```ini
-> OLLAMA_BASE_URL=http://127.0.0.1:11434        # compose overrides to http://ollama:11434
+> OLLAMA_BASE_URL=http://127.0.0.1:11434        # for local `uvicorn` without Docker; Docker compose hard-codes http://host.docker.internal:11434 (host GPU)
 > DEFAULT_MODEL=phi4-mini:latest
-> AVAILABLE_MODELS=phi4-mini:latest
+> AVAILABLE_MODELS=phi4-mini:latest,qwen3:4b
 > PRECIS_API_KEY=replace-with-a-long-random-secret
 > VITE_API_KEY=replace-with-a-long-random-secret
 > PRECIS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8000
 > VITE_API_BASE_URL=                            # empty = same origin (correct for Docker)
+> # NOTE: OLLAMA_HOST_DIR removed — no Docker Ollama container, no bind mount. Host Ollama uses its native store.
 > ```
-
-Manually update `.env.example` to match the block above if your copy is older.
 
 ### 3. Run
 
+**Terminal 1 — keep host Ollama running:**
 ```bash
-docker compose up --watch
+# If Ollama was started with default 127.0.0.1 binding and api gets 503, restart host Ollama as:
+# OLLAMA_HOST=0.0.0.0 ollama serve
+ollama serve
 ```
 
-- First build takes ~4-6 min (multi-stage: Node build + `conda env create -f environment.yml` for `precis` — cached after first build).
-- Opens: **http://localhost:5173** (Vite HMR) + API at **http://localhost:8000** (`/docs`, `/health`). With `--watch`, edits to `backend/` and `frontend/` hot-reload automatically.
-- Compose healthchecks wait for Ollama (`/api/tags`) before starting the API (which runs as `conda run -n precis uvicorn`).
+**Terminal 2 — from repo root (use -d so terminal isn't blocked):**
+```bash
+docker compose up --watch -d
+# or without -d if you want logs in this terminal (needs 2nd terminal for other commands)
+```
 
-#### Pull a model (inside Ollama container)
+- First build takes ~4-6 min (multi-stage: Node build + `conda env create -f environment.yml` for `precis` — cached after first build). Subsequent `up --watch -d` takes ~15s (no rebuild).
+- Opens: **http://localhost:5173** (Vite HMR, host Ollama GPU) + API at **http://localhost:8000** (`/docs`, `/health`). With `--watch`, edits to `backend/` and `frontend/` hot-reload automatically.
+- `GET /models` now proxies to **host** Ollama at `http://host.docker.internal:11434` — no `ollama-init` sidecar, no manifest pull. If host has no models, API 503s with `run ollama pull ...`.
 
-The API will 503 until a model is installed. In a **second terminal**:
+#### Pull a model (on HOST, not in Docker)
+
+The API will 503 until a model is installed. On **host**:
 
 ```bash
-docker exec -it precis-ollama ollama pull phi4-mini:latest
+ollama pull phi4-mini:latest
 # optional extras:
-docker exec -it precis-ollama ollama pull llama3.1:latest
-docker exec -it precis-ollama ollama pull qwen3:4b
-docker exec -it precis-ollama ollama list
+ollama pull qwen3:4b
+ollama list
 ```
 
 Then refresh http://localhost:5173 — the model selector populates automatically (`GET /models` proxied to `:8000`).
@@ -112,19 +126,18 @@ Then refresh http://localhost:5173 — the model selector populates automaticall
 
 ```bash
 docker compose up --watch -d   # detached with watch
-docker compose logs -f api     # tail API logs
-docker compose logs -f ollama
+docker compose logs -f api     # tail API logs (no ollama container anymore)
 docker compose logs -f frontend
-docker compose down            # stop
-docker compose down -v         # stop + wipe Ollama model cache (only if using named volume)
+docker compose down            # stop api+frontend
 docker compose ps
 curl http://localhost:8000/health
 curl http://localhost:8000/status
+curl http://host.docker.internal:11434/api/tags # verify host Ollama reachable from Docker
 # prod without watch/HMR (static frontend at 8000):
-docker compose -f docker-compose.yml up --build
+docker compose -f docker-compose.yml up --build -d
 ```
 
-#### Single-image run (without compose / without Ollama sidecar)
+#### Single-image run (without compose)
 
 If you just want the API image and already run Ollama natively (`ollama serve` on host):
 
@@ -132,17 +145,18 @@ If you just want the API image and already run Ollama natively (`ollama serve` o
 docker build -t precis .
 docker run --rm -p 8000:8000 --env-file .env \
   -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+  --add-host=host.docker.internal:host-gateway \
   precis
-# Windows/Mac: host.docker.internal resolves to host. Linux: add --add-host=host.docker.internal:host-gateway
+# Windows/Mac: host.docker.internal resolves to host. Linux already adds host-gateway above.
 ```
 
 #### Hugging Face Spaces
 
-`sdk: docker` with `EXPOSE 8000 7860` + `ENV PORT=8000` + `CMD sh -c "uvicorn ... --port ${PORT:-8000}"` means the same image works everywhere: locally `http://localhost:8000` (compose sets `PORT=8000`), on HF Spaces Hugging Face sets `PORT=7860` automatically and the container listens on `7860` with no extra config.
+`sdk: docker` with `EXPOSE 8000 7860` + `ENV PORT=8000` + `CMD sh -c "uvicorn ... --port ${PORT:-8000}"` means the same image works everywhere: locally `http://localhost:8000` (compose sets `PORT=8000`), on HF Spaces Hugging Face sets `PORT=7860` automatically and the container listens on `7860` with no extra config. HF Spaces will need its own Ollama or external `OLLAMA_BASE_URL`.
 
 ---
 
-## Manual Development
+## Manual Development (without Docker)
 
 Use this if you want hot-reload for the frontend/backend separately. Docker remains the reproducible path.
 
@@ -151,14 +165,14 @@ Use this if you want hot-reload for the frontend/backend separately. Docker rema
 - **Conda** (Miniconda/Anaconda/Mamba) with env **`precis`** (`conda env create -f environment.yml` / `conda activate precis`) — Python 3.11, same env the Docker image uses
   - Alternative without conda: **Python** 3.11+ + `pip install -r requirements.txt`
 - **Node.js** 18+
-- **Ollama** (`ollama serve` to run) + at least one model: `ollama pull phi4-mini:latest`
+- **Ollama (host, native)** (`ollama serve` to run) + at least one model: `ollama pull phi4-mini:latest`
 
 ### 1. Environment
 
 ```bash
 cp .env.example .env
 # set PRECIS_API_KEY, VITE_API_KEY (same value), and for local:
-# OLLAMA_BASE_URL=http://127.0.0.1:11434
+# OLLAMA_BASE_URL=http://127.0.0.1:11434  (host native)
 # VITE_API_BASE_URL=http://localhost:8000   # or leave empty and rely on Vite proxy
 ```
 

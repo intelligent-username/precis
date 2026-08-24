@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
-os.environ.setdefault("OLLAMA_BASE_URL", "http://ollama:11434")
+os.environ.setdefault("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 os.environ.setdefault("DEFAULT_MODEL", "phi4-mini:latest")
 os.environ.setdefault("PRECIS_API_KEY", "test-key")
 os.environ.setdefault("AVAILABLE_MODELS", "phi4-mini:latest,qwen:4b")

@@ -1,24 +1,4 @@
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: precis-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      # Single copy — bind mount host Windows folder if OLLAMA_HOST_DIR is set in .env
-      # (e.g. OLLAMA_HOST_DIR=C:/Users/varak/.ollama). If unset/empty, falls back to
-      # named volume 'ollama_data' (isolated, but faster I/O than Windows bind).
-      # Short syntax with fallback: "${VAR:-default}:/target" — quoted for Windows paths.
-      - "${OLLAMA_HOST_DIR:-ollama_data}:/root/.ollama"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || wget -qO- http://localhost:11434/api/tags >/dev/null 2>&1 || curl -fsS http://localhost:11434/api/tags >/dev/null 2>&1"]
-      interval: 15s
-      timeout: 5s
-      retries: 8
-      start_period: 20s
-      start_interval: 3s
-
   api:
     build:
       context: .
@@ -35,20 +15,19 @@ services:
     env_file:
       - .env
     environment:
-      # CRITICAL FIX for 503 "Cannot reach Ollama": inside Docker, Ollama is at http://ollama:11434,
-      # NOT 127.0.0.1 (which points to the api container itself). The .env file's
-      # OLLAMA_BASE_URL=http://127.0.0.1:11434 is for host-only dev. Hardcode here so
-      # compose .env interpolation can't override it with the host value.
+      # Host Ollama (Option A) — blazing fast GPU, no 2.5GB re-download.
+      # api inside Docker talks to host via host.docker.internal:11434.
+      # Host must have `ollama serve` running (see README). On Windows Docker Desktop this resolves automatically.
+      # If host Ollama was started with default 127.0.0.1 binding, set OLLAMA_HOST=0.0.0.0 on host before `ollama serve`.
       PORT: ${PORT:-8000}
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
       DEFAULT_MODEL: ${DEFAULT_MODEL:-phi4-mini:latest}
       AVAILABLE_MODELS: ${AVAILABLE_MODELS:-phi4-mini:latest}
       PRECIS_ALLOWED_ORIGINS: ${PRECIS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8000,http://localhost:7860,https://*.hf.space,https://*.huggingface.co}
       PRECIS_API_KEY: ${PRECIS_API_KEY:?PRECIS_API_KEY must be set in .env}
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
-    depends_on:
-      ollama:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Mount .env read-only so config.py hot-reload isn't needed — container restarts pick up changes
       - type: bind
@@ -63,87 +42,4 @@ services:
       retries: 5
       start_period: 20s
 
-  ollama-init:
-    image: ollama/ollama:latest
-    container_name: precis-ollama-init
-    volumes:
-      - "${OLLAMA_HOST_DIR:-ollama_data}:/root/.ollama"
-    env_file:
-      - .env
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    depends_on:
-      ollama:
-        condition: service_healthy
-    entrypoint: sh
-    command:
-      - -c
-      - |
-        set -e
-        echo "ollama-init: checking local models (host bind: ${OLLAMA_HOST_DIR:-<named volume ollama_data>})"
-        echo "AVAILABLE_MODELS=$$AVAILABLE_MODELS  DEFAULT_MODEL=$$DEFAULT_MODEL"
-        echo "OLLAMA_HOST=$$OLLAMA_HOST  OLLAMA_HOST_DIR fallback: ${OLLAMA_HOST_DIR:-ollama_data}"
-        # Wait for Ollama API to actually be ready (healthcheck may pass earlier)
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-          if curl -fsS http://ollama:11434/api/tags >/dev/null 2>&1; then
-            echo "ollama API ready after $$i tries"
-            break
-          fi
-          echo "waiting for ollama API... $$i"
-          sleep 2
-        done
-        echo "existing models (ollama list):"
-        ollama list || true
-        echo "existing models (API /api/tags):"
-        curl -fsS http://ollama:11434/api/tags 2>/dev/null || echo "API tags fetch failed"
-        # ── IDEMPOTENT PULL: only pull if not already present ──
-        # Fixes "pulling 2.5GB raw" when host bind already has models.
-        # We re-query inside the loop (not cached) because Ollama may still be
-        # importing the bind-mounted blobs on first start.
-        for m in $$(echo "$$AVAILABLE_MODELS,$$DEFAULT_MODEL" | tr ',' ' ' | tr -s ' ' '\n' | sort -u); do
-          m=$$(echo "$$m" | xargs)
-          [ -z "$$m" ] && continue
-          echo "--- checking $$m ---"
-          # Fresh check each iteration via both CLI and API (CLI may lag on Windows bind)
-          if ollama list 2>/dev/null | awk 'NR>1{print $$1}' | grep -qx "$$m"; then
-            echo "-> $$m already installed (ollama list exact) — skipping pull"
-            continue
-          fi
-          if ollama list 2>/dev/null | awk 'NR>1{print $$1}' | grep -q "^$${m%%:*}:"; then
-            echo "-> $$m already installed (ollama list prefix) — skipping pull"
-            continue
-          fi
-          if curl -fsS http://ollama:11434/api/tags 2>/dev/null | grep -q "\"name\":\"$$m\""; then
-            echo "-> $$m already installed (API exact) — skipping pull"
-            continue
-          fi
-          # Check without tag: "phi4-mini" should match "phi4-mini:latest"
-          base="$${m%%:*}"
-          if curl -fsS http://ollama:11434/api/tags 2>/dev/null | grep -q "\"name\":\"$$base:"; then
-            echo "-> $$m already installed (API prefix $$base) — skipping pull"
-            continue
-          fi
-          if ollama show "$$m" >/dev/null 2>&1; then
-            echo "-> $$m show succeeded — skipping pull"
-            continue
-          fi
-          # Also check filesystem directly (Windows bind may not be reflected in list yet)
-          # Ollama stores manifests at /root/.ollama/models/manifests/registry.ollama.ai/library/<name>/<tag>
-          manifest_path="/root/.ollama/models/manifests/registry.ollama.ai/library/$$base"
-          if [ -d "$$manifest_path" ]; then
-            echo "-> $$m manifest dir exists at $$manifest_path — skipping pull (filesystem hit)"
-            continue
-          fi
-          echo "-> ollama pull $$m (not found locally, will download)"
-          # If this still shows "pulling manifest 2.5GB", it means the model truly wasn't
-          # on the host bind. To use host's models, ensure .env has:
-          #   OLLAMA_HOST_DIR=C:/Users/YOURNAME/.ollama  (forward slashes, no trailing slash)
-          # and that host `ollama list` shows the model. Fallback named volume is empty on first run.
-          ollama pull "$$m" || echo "pull failed for $$m (may already exist or name wrong)"
-        done
-        echo "ollama-init done:"
-        ollama list || curl -fsS http://ollama:11434/api/tags || true
-    restart: "no"
-
-volumes:
-  ollama_data: {}
+volumes: {}

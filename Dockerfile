@@ -61,7 +61,7 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 EXPOSE 8000 7860
 
 ENV PORT=8000 \
-    OLLAMA_BASE_URL=http://ollama:11434 \
+    OLLAMA_BASE_URL=http://host.docker.internal:11434 \
     DEFAULT_MODEL=phi4-mini:latest \
     AVAILABLE_MODELS=phi4-mini:latest \
     PRECIS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8000,http://localhost:7860,https://*.hf.space,https://*.huggingface.co

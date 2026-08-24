@@ -1,7 +1,10 @@
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from config import MAX_TRANSCRIPT_CHARS
+try:
+    from config import MAX_TRANSCRIPT_CHARS  # type: ignore
+except ImportError:
+    from backend.config import MAX_TRANSCRIPT_CHARS  # type: ignore
 
 
 class YouTubeRequest(BaseModel):

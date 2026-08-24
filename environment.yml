@@ -1,0 +1,23 @@
+name: precis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      # ── API (runtime) ────────────────────────────────────────────────
+      - fastapi
+      - uvicorn[standard]
+      - httpx
+      - python-multipart
+      - python-dotenv
+      - youtube-transcript-api
+      # ── Training / eval (optional — keep parity with requirements.txt) ─
+      - torch
+      - transformers
+      - accelerate
+      - bitsandbytes
+      - peft
+      - datasets
+      - sentencepiece

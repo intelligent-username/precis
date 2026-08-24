@@ -9,11 +9,18 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import ModelConfig, TrainingConfig, DataConfig
-from src.model import load_model, load_tokenizer, prepare_for_training
-from src.tuning.lora import apply_lora
-from src.tuning.data import create_dummy_data, prepare_dataset
-from src.tuning.trainer import PrecisTrainer
+try:
+    from src.config import ModelConfig, TrainingConfig, DataConfig
+    from src.model import load_model, load_tokenizer, prepare_for_training
+    from src.tuning.lora import apply_lora
+    from src.tuning.data import create_dummy_data, prepare_dataset
+    from src.tuning.trainer import PrecisTrainer
+except ImportError:
+    from init.config import ModelConfig, TrainingConfig, DataConfig
+    from init.model import load_model, load_tokenizer, prepare_for_training
+    from init.tuning.lora import apply_lora
+    from init.tuning.data import create_dummy_data, prepare_dataset
+    from init.tuning.trainer import PrecisTrainer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

@@ -6,10 +6,16 @@ import httpx
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
-from config import (
-    OLLAMA_BASE_URL, DEFAULT_MODEL, AVAILABLE_MODELS,
-    MAX_SUMMARY_TOKENS, TEMPERATURE,
-)
+try:
+    from config import (  # type: ignore
+        OLLAMA_BASE_URL, DEFAULT_MODEL, AVAILABLE_MODELS,
+        MAX_SUMMARY_TOKENS, TEMPERATURE,
+    )
+except ImportError:
+    from backend.config import (  # type: ignore
+        OLLAMA_BASE_URL, DEFAULT_MODEL, AVAILABLE_MODELS,
+        MAX_SUMMARY_TOKENS, TEMPERATURE,
+    )
 
 
 def build_prompt(title: Optional[str], text: str) -> str:

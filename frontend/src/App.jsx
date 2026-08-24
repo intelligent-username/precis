@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import InlineResult from './components/InlineResult'
 import { useStreaming } from './hooks/useStreaming'
-import logoSvg from './assets/logo.svg'
 import { API_BASE } from './config'
+const logoSvg = '/logo.svg'
 import './App.css'
 
 function App() {

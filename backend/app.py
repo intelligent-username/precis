@@ -7,17 +7,30 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config import (
-    OLLAMA_BASE_URL,
-    DEFAULT_MODEL,
-    AVAILABLE_MODELS,
-    ALLOWED_ORIGINS,
-    API_KEY,
-    MAX_UPLOAD_BYTES,
-)
-from schemas import TranscriptRequest, YouTubeRequest, UnloadRequest
-from ollama import stream_summary
-from helpers.transcript import transcript as fetch_yt_transcript
+try:  # Docker flattened: /app/config.py  |  Local: backend/config.py
+    from config import (  # type: ignore
+        OLLAMA_BASE_URL,
+        DEFAULT_MODEL,
+        AVAILABLE_MODELS,
+        ALLOWED_ORIGINS,
+        API_KEY,
+        MAX_UPLOAD_BYTES,
+    )
+    from schemas import TranscriptRequest, YouTubeRequest, UnloadRequest  # type: ignore
+    from ollama import stream_summary  # type: ignore
+    from helpers.transcript import transcript as fetch_yt_transcript  # type: ignore
+except ImportError:  # Running as `backend.app` package
+    from backend.config import (  # type: ignore
+        OLLAMA_BASE_URL,
+        DEFAULT_MODEL,
+        AVAILABLE_MODELS,
+        ALLOWED_ORIGINS,
+        API_KEY,
+        MAX_UPLOAD_BYTES,
+    )
+    from backend.schemas import TranscriptRequest, YouTubeRequest, UnloadRequest  # type: ignore
+    from backend.ollama import stream_summary  # type: ignore
+    from backend.helpers.transcript import transcript as fetch_yt_transcript  # type: ignore
 
 app = FastAPI(
     title="Précis API",
@@ -33,17 +46,14 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key"],
 )
 
-# Only mount frontend in production when dist/ exists
-if os.path.isdir("frontend/dist"):
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
-
 def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     if not API_KEY:
         raise HTTPException(
             status_code=500,
             detail="Server misconfigured: PRECIS_API_KEY must be set.",
         )
-    if x_api_key != API_KEY:
+    import secrets as _secrets
+    if not _secrets.compare_digest(x_api_key or "", API_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key.")
 
 
@@ -223,13 +233,16 @@ async def summarize_file(
 ):
     verify_api_key(x_api_key)
     content_length = req.headers.get("content-length")
-    if content_length and int(content_length) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+    try:
+        if content_length and int(content_length) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+    except ValueError:
+        pass
 
-    if not file.filename.endswith(".txt"):
+    if not file.filename or not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported.")
 
-    content = await file.read()
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Uploaded file is too large.")
 
@@ -242,6 +255,22 @@ async def summarize_file(
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     return await stream_summary(text, title=file.filename, model=model)
 
+
+# ── Mount frontend LAST so /health, /models, /docs etc. are not shadowed ──
+# Starlette matches mounts in order — "/" mounted first would swallow /health.
+from pathlib import Path as _Path
+
+_frontend_candidates = [
+    _Path(__file__).resolve().parent.parent / "frontend" / "dist",
+    _Path(__file__).resolve().parent / "frontend" / "dist",
+    _Path.cwd() / "frontend" / "dist",
+]
+_frontend_dist = next((str(p) for p in _frontend_candidates if p.is_dir()), None)
+if _frontend_dist:
+    try:
+        app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="static")
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     import uvicorn

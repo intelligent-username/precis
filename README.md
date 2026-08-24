@@ -10,16 +10,7 @@ app_file: app.py
 pinned: false
 ---
 
-
-
 <h1 align="center">Précis</h1>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.11-blue?style=flat-square&logo=python" alt="Python 3.11">
-  <img src="https://img.shields.io/badge/node-18+-green?style=flat-square&logo=nodedotjs" alt="Node 18+">
-  <img src="https://img.shields.io/badge/ollama-required-orange?style=flat-square&logo=ollama" alt="Ollama">
-  <img src="https://img.shields.io/badge/license-GPL--3.0-brightgreen?style=flat-square" alt="License">
-</p>
 
 <p align="center">
   <em>Compress long-form content into clear, structured summaries.</em>
@@ -55,55 +46,154 @@ pinned: false
 | `POST`  | `/summarize/youtube`    | YouTube video by URL  |
 | `POST`  | `/summarize/file`       | `.txt` file summary   |
 
-All `/summarize/*` endpoints accept an optional `model` field to override the default.
+All `/summarize/*` endpoints accept an optional `model` field to override the default and require `X-API-Key` header (`PRECIS_API_KEY`).
 
 ---
 
-## Local Setup
+## Quick Start (Docker)
+
+**One command** to build and run the whole stack (API + frontend + Ollama). This is the main way to run Précis — no manual `ollama serve`/`uvicorn`/`vite` needed.
+
+> **Python runs inside the `precis` conda environment** — same as your local setup. The `Dockerfile` uses `continuumio/miniconda3` + `environment.yml` to create `conda env precis` (Python 3.11) and installs all deps there; the container's `PATH` points to `/opt/conda/envs/precis/bin`, so `uvicorn` runs from `precis`.
+
+### 1. Prerequisites
+
+- **Docker** + **Docker Compose** ([Install Docker Desktop](https://docs.docker.com/get-docker/))
+- That's it. Python (via `precis` conda env), Node, and Ollama are all inside the containers. No local conda/Python/Node needed.
+
+### 2. Configure
+
+```bash
+# from repo root
+cp .env.example .env
+# edit .env — set a strong secret:
+# PRECIS_API_KEY=openssl rand -hex 32  (or any long random string)
+# VITE_API_KEY must match PRECIS_API_KEY so the baked frontend can auth
+```
+
+> **`.env.example` defaults for Docker:**
+> ```ini
+> OLLAMA_BASE_URL=http://127.0.0.1:11434        # compose overrides to http://ollama:11434
+> DEFAULT_MODEL=phi4-mini:latest
+> AVAILABLE_MODELS=phi4-mini:latest
+> PRECIS_API_KEY=replace-with-a-long-random-secret
+> VITE_API_KEY=replace-with-a-long-random-secret
+> PRECIS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5555
+> VITE_API_BASE_URL=                            # empty = same origin (correct for Docker)
+> ```
+
+Manually update `.env.example` to match the block above if your copy is older.
+
+### 3. Run
+
+```bash
+docker compose up --build
+```
+
+- First build takes ~4-6 min (multi-stage: Node build + `conda env create -f environment.yml` for `precis` — cached after first build).
+- Opens: **http://localhost:5555** — single origin serves both API (`/docs`, `/health`) and the frontend.
+- Compose healthchecks wait for Ollama (`/api/tags`) before starting the API (which runs as `conda run -n precis uvicorn`).
+
+#### Pull a model (inside Ollama container)
+
+The API will 503 until a model is installed. In a **second terminal**:
+
+```bash
+docker exec -it precis-ollama ollama pull phi4-mini:latest
+# optional extras:
+docker exec -it precis-ollama ollama pull llama3.1:latest
+docker exec -it precis-ollama ollama pull qwen3:4b
+docker exec -it precis-ollama ollama list
+```
+
+Then refresh http://localhost:5555 — the model selector populates automatically (`GET /models`).
+
+#### Useful commands
+
+```bash
+docker compose up --build -d   # detached
+docker compose logs -f api     # tail API logs
+docker compose logs -f ollama
+docker compose down            # stop
+docker compose down -v         # stop + wipe Ollama model cache (ollama_data volume)
+docker compose ps
+curl http://localhost:5555/health
+curl http://localhost:5555/status
+```
+
+#### Single-image run (without compose / without Ollama sidecar)
+
+If you just want the API image and already run Ollama natively (`ollama serve` on host):
+
+```bash
+docker build -t precis .
+docker run --rm -p 5555:5555 --env-file .env \
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+  precis
+# Windows/Mac: host.docker.internal resolves to host. Linux: add --add-host=host.docker.internal:host-gateway
+```
+
+#### Hugging Face Spaces
+
+`sdk: docker` with `EXPOSE 5555 7860` + `ENV PORT=5555` + `CMD sh -c "uvicorn ... --port ${PORT:-5555}"` means the same image works everywhere: locally `http://localhost:5555` (compose sets `PORT=5555`), on HF Spaces Hugging Face sets `PORT=7860` automatically and the container listens on `7860` with no extra config.
+
+---
+
+## Manual Development
+
+Use this if you want hot-reload for the frontend/backend separately. Docker remains the reproducible path.
 
 ### Prerequisites
 
-- **Python** 3.11+
-- **Node.js** 18+ (or an equivalent alternative)
-- **Ollama** (`ollama serve` to run)
-- At least one model pulled, e.g. `ollama pull phi4-mini:latest`
+- **Conda** (Miniconda/Anaconda/Mamba) with env **`precis`** (`conda env create -f environment.yml` / `conda activate precis`) — Python 3.11, same env the Docker image uses
+  - Alternative without conda: **Python** 3.11+ + `pip install -r requirements.txt`
+- **Node.js** 18+
+- **Ollama** (`ollama serve` to run) + at least one model: `ollama pull phi4-mini:latest`
 
----
+### 1. Environment
 
-### Run the Fine-Tuning
+```bash
+cp .env.example .env
+# set PRECIS_API_KEY, VITE_API_KEY (same value), and for local:
+# OLLAMA_BASE_URL=http://127.0.0.1:11434
+# VITE_API_BASE_URL=http://localhost:5555   # or leave empty and rely on Vite proxy
+```
 
-Scripts live in `scripts/`. The project has been tested primarily with **phi4-mini** (Microsoft) and **Qwen 3-4b** (Alibaba), but you can use whichever model you like.
+### 2. Run the Fine-Tuning (optional)
+
+Scripts live in `scripts/`. Tested primarily with **phi4-mini** (Microsoft) and **Qwen 3-4b** (Alibaba).
 
 ```bash
 ollama pull phi4-mini:latest
 ollama pull llama3.1:latest
 ```
 
----
+### 3. Test Fine-Tuning Quality
 
-### Test Fine-Tuning Quality
-
-To evaluate summarization accuracy, run the script below against the `test` split. It uses **BERTScore** (0 to 1.0, higher is better), comparing semantic similarity between generated summaries and references. This captures key facts without penalizing different wording.
+To evaluate summarization accuracy, run the script below against the `test` split. It uses **BERTScore** (0 to 1.0, higher is better), comparing semantic similarity between generated summaries and references.
 
 ```bash
 python -m scripts.test --model phi4-mini:latest
 ```
 
----
-
-### Start the Backend
+### 4. Start the Backend
 
 ```bash
-pip install -r ../requirements.txt
-cd backend
-uvicorn app:app --reload
+# With conda (recommended — mirrors Docker):
+conda env create -f environment.yml   # once
+conda activate precis
+pip install -r requirements.txt       # keep in sync if you edit requirements.txt
+uvicorn backend.app:app --reload --port 5555
+# or: cd backend && uvicorn app:app --reload --port 5555
+
+# Without conda:
+# pip install -r requirements.txt
+# uvicorn backend.app:app --reload --port 5555
 ```
 
-Served at **`http://localhost:8000`** with interactive docs at `/docs`.
+Served at **`http://localhost:5555`** with interactive docs at `/docs`.
 
----
-
-### Run the Frontend
+### 5. Run the Frontend
 
 ```bash
 cd frontend
@@ -113,7 +203,7 @@ npm run dev
 
 Served at **`http://localhost:5173`**.
 
-The frontend dev server proxies API calls to the backend automatically, so you only need to visit `http://localhost:5173`.
+`vite.config.js` proxies `/health`, `/status`, `/models`, `/summarize`, `/warmup`, `/unload` to `http://localhost:5555`, so you only need to visit `http://localhost:5173` — no manual `VITE_API_BASE_URL` required. For custom backend ports, set `VITE_API_BASE_URL` in `.env`.
 
 ---
 

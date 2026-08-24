@@ -19,3 +19,6 @@ notes/
 # Front end
 node_modules
 package-lock.json
+
+# Personal
+plans/

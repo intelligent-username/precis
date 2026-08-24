@@ -1,0 +1,66 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: precis-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      # Reuse host's Ollama models (~/.ollama) so you don't keep 2 copies.
+      # On Windows: C:\Users\varak\.ollama -> /root/.ollama in container.
+      # Set OLLAMA_HOST_DIR in .env if your host path differs.
+      # NOTE: You can't run host `ollama serve` + this container at same time on 11434 — stop one first.
+      - type: bind
+        source: ${OLLAMA_HOST_DIR:-C:/Users/varak/.ollama}
+        target: /root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || wget -qO- http://localhost:11434/api/tags >/dev/null 2>&1 || curl -fsS http://localhost:11434/api/tags >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+      start_interval: 2s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Baked into frontend at `npm run build` time (Vite inlines env).
+        # api still reads PRECIS_API_KEY at runtime via env_file / environment.
+        VITE_API_BASE_URL: ""  # same-origin in Docker (frontend served by FastAPI)
+        PRECIS_API_KEY: ${PRECIS_API_KEY:-}
+        VITE_API_KEY: ${VITE_API_KEY:-${PRECIS_API_KEY:-}}
+    container_name: precis-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Docker defaults — overridden by .env if set
+      PORT: 8000
+      OLLAMA_BASE_URL: http://ollama:11434
+      # Keep in sync with .env.example if you change defaults
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-phi4-mini:latest}
+      AVAILABLE_MODELS: ${AVAILABLE_MODELS:-phi4-mini:latest}
+      PRECIS_ALLOWED_ORIGINS: ${PRECIS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8000,http://localhost:7860,https://*.hf.space,https://*.huggingface.co}
+      PRECIS_API_KEY: ${PRECIS_API_KEY:?PRECIS_API_KEY must be set in .env}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      # Mount .env read-only so config.py hot-reload isn't needed — container restarts pick up changes
+      - type: bind
+        source: ./.env
+        target: /app/.env
+        read_only: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes: {}

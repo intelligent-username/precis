@@ -1,43 +1,66 @@
-FROM ubuntu:22.04
+# syntax=docker/dockerfile:1
 
-# Set environment variables
+# ── Stage 1: Build frontend ──────────────────────────────────────────────
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci || npm install
+COPY frontend ./
+# Build-time env: API_BASE empty = same origin (FastAPI serves frontend)
+ARG VITE_API_BASE_URL=""
+ARG PRECIS_API_KEY=""
+ARG VITE_API_KEY=""
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV PRECIS_API_KEY=${PRECIS_API_KEY}
+ENV VITE_API_KEY=${VITE_API_KEY}
+RUN npm run build
+
+# ── Stage 2: Python runtime via conda env `precis` ──────────────────────
+FROM continuumio/miniconda3:latest
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    NODE_ENV=production
+    PIP_NO_CACHE_DIR=1 \
+    NODE_ENV=production \
+    CONDA_AUTO_UPDATE_CONDA=false
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-venv \
-    python3-pip \
-    nodejs \
-    npm \
-    git \
-    curl \
+# curl for healthchecks
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python 3.11 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
-    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
-
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Create the `precis` env exactly as you do locally:
+#   conda env create -f environment.yml  (or `conda create -n precis python=3.11 && pip install -r requirements.txt`)
+COPY environment.yml requirements.txt ./
+RUN conda env create -f environment.yml && conda clean -afy
 
-# Copy frontend
-# COPY frontend ./frontend
-# WORKDIR /app/frontend
-# RUN npm install && npm run build
+# Make `precis` the default Python for all subsequent layers + runtime
+ENV CONDA_DEFAULT_ENV=precis
+ENV CONDA_PREFIX=/opt/conda/envs/precis
+ENV PATH=/opt/conda/envs/precis/bin:$PATH
 
-# Copy backend
-WORKDIR /app
-COPY backend ./backend
-COPY backend/app.py .
+# Verify the env (fails fast if not created)
+RUN which python && python --version && conda run -n precis python -c "import fastapi, httpx; print('precis env ready')"
 
-# Expose port (HF Spaces uses 7860)
-EXPOSE 7860
+# Copy backend flattened to /app so `from config import ...` works with `uvicorn app:app`
+COPY backend ./
 
-# Start the FastAPI server
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Bring built frontend to where app.py expects it: /app/frontend/dist
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
+# HF Spaces expects 7860, local dev uses 8000 — expose both.
+# At runtime HF sets $PORT=7860; locally defaults to 8000 via ENV PORT.
+EXPOSE 8000 7860
+
+ENV PORT=8000 \
+    OLLAMA_BASE_URL=http://ollama:11434 \
+    DEFAULT_MODEL=phi4-mini:latest \
+    AVAILABLE_MODELS=phi4-mini:latest \
+    PRECIS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8000,http://localhost:7860,https://*.hf.space,https://*.huggingface.co
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT:-8000}/health || curl -fsS http://localhost:8000/health || curl -fsS http://localhost:7860/health || exit 1
+
+# Uses precis env via PATH; shell form expands $PORT (HF sets 7860, local uses 8000)
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]

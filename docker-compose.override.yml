@@ -1,0 +1,37 @@
+# Dev override — auto-merged by `docker compose up`
+# Gives you the same hot-reload you get manually:
+#   - backend: uvicorn --reload via host mount
+#   - frontend: vite dev server with HMR on :5173
+# To run production (no reload): `docker compose -f docker-compose.yml up --build`
+
+services:
+  api:
+    # Mount host backend over image copy for live reload.
+    # Host ./backend -> /app/backend, run as `backend.app` (package layout).
+    volumes:
+      - ./backend:/app/backend
+      - ./.env:/app/.env:ro
+      # Keep frontend/dist from image (don't hide with host mount)
+    command: sh -c "uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/backend --reload-dir /app"
+    environment:
+      # Ensure vite proxy / same-origin still works in dev
+      PRECIS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8000,http://localhost:7860
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app/frontend
+    command: sh -c "npm ci --silent || npm install --silent; npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    env_file:
+      - .env
+    environment:
+      VITE_API_BASE_URL: "" # uses vite proxy
+      VITE_PROXY_TARGET: http://api:8000
+      DOCKER: "1"
+    depends_on:
+      api:
+        condition: service_healthy

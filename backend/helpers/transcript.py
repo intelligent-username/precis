@@ -57,9 +57,16 @@ def _extract_video_id(url: str) -> str:
 
 def _fetch_transcript_sync(video_id: str) -> str:
     """Blocking transcript fetch. Always call via ``asyncio.to_thread``."""
-    ytt = YouTubeTranscriptApi()
     try:
-        t = ytt.fetch(video_id, languages=_LANG_PREFS)
+        ytt = YouTubeTranscriptApi()
+        fetch = getattr(ytt, "fetch", None) or getattr(YouTubeTranscriptApi, "get_transcript", None)
+        if fetch is None:
+            raise AttributeError("No transcript fetch method")
+        # instance fetch vs static get_transcript have different signatures
+        try:
+            t = fetch(video_id, languages=_LANG_PREFS) if fetch is getattr(ytt, "fetch", None) else fetch(video_id, languages=_LANG_PREFS)
+        except TypeError:
+            t = fetch(video_id)
     except TranscriptsDisabled:
         raise HTTPException(
             status_code=422,

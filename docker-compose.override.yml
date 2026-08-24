@@ -6,32 +6,58 @@
 
 services:
   api:
-    # Mount host backend over image copy for live reload.
-    # Host ./backend -> /app/backend, run as `backend.app` (package layout).
+    # Watch syncs host -> container for live reload (no bind mount needed when using --watch).
+    # For `docker compose up` without --watch, we still mount backend so edits apply after restart.
     volumes:
-      - ./backend:/app/backend
       - ./.env:/app/.env:ro
-      # Keep frontend/dist from image (don't hide with host mount)
-    command: sh -c "uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/backend --reload-dir /app"
+      - ./backend:/app:cached
+    command: sh -c "uvicorn app:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app --reload-exclude '*.pyc' --reload-exclude '__pycache__/*' --reload-exclude '.pytest_cache/*'"
     environment:
       # Ensure vite proxy / same-origin still works in dev
       PRECIS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8000,http://localhost:7860
+      # Reduce Python lag: disable bytecode write, unbuffered already set in Dockerfile
+      PYTHONDONTWRITEBYTECODE: "1"
+    develop:
+      watch:
+        - action: sync
+          path: ./backend
+          target: /app
+          ignore:
+            - __pycache__/
+            - "*.pyc"
+        - action: rebuild
+          path: ./requirements.txt
+        - action: rebuild
+          path: ./environment.yml
+        - action: rebuild
+          path: ./Dockerfile
 
   frontend:
     image: node:20-alpine
     working_dir: /app/frontend
-    command: sh -c "npm ci --silent || npm install --silent; npm run dev -- --host 0.0.0.0 --port 5173"
+    # Only reinstall if node_modules missing — `npm ci` every start is laggy (1-2 min)
+    command: sh -c "if [ ! -d node_modules ] || [ ! -f node_modules/.package-lock.json ]; then npm ci --silent || npm install --silent; fi; npm run dev -- --host 0.0.0.0 --port 5173"
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/app/frontend
-      - /app/frontend/node_modules
+      - ./frontend:/app/frontend:cached
+      - frontend_node_modules:/app/frontend/node_modules
     env_file:
       - .env
     environment:
-      VITE_API_BASE_URL: "" # uses vite proxy
+      VITE_API_BASE_URL: "" # uses vite proxy (see vite.config.js)
       VITE_PROXY_TARGET: http://api:8000
+      # FIX for 401 Unauthorized: Vite dev needs the API key baked into the HMR bundle.
+      # .env often only sets PRECIS_API_KEY; VITE_API_KEY defaults to that. Without this fallback,
+      # import.meta.env.VITE_API_KEY is empty → authHeaders() sends no X-API-Key → 401.
+      VITE_API_KEY: ${VITE_API_KEY:-${PRECIS_API_KEY:-}}
       DOCKER: "1"
+      # Reduce Vite watcher lag — poll only on Windows/virtiofs
+      CHOKIDAR_USEPOLLING: "1"
+      CHOKIDAR_INTERVAL: "1000"
     depends_on:
       api:
         condition: service_healthy
+
+volumes:
+  frontend_node_modules: {}

@@ -3,8 +3,11 @@ from typing import Optional
 import os
 
 import httpx
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 try:  # Docker flattened: /app/config.py  |  Local: backend/config.py
@@ -57,12 +60,47 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-
         raise HTTPException(status_code=401, detail="Invalid API key.")
 
 
+# ── Frontend detection (must happen before routes that shadow SPA) ──
+# This mirrors the mount detection below but is available to the root handler.
+_frontend_candidates = [
+    Path(__file__).resolve().parent.parent / "frontend" / "dist",
+    Path(__file__).resolve().parent / "frontend" / "dist",
+    Path.cwd() / "frontend" / "dist",
+]
+_frontend_dist_path = next((p for p in _frontend_candidates if p.is_dir()), None)
+_frontend_index = (_frontend_dist_path / "index.html") if _frontend_dist_path else None
+
+
 @app.get("/favicon.ico")
 async def favicon():
+    # Serve real favicon if frontend dist exists, else empty (browser will fallback)
+    if _frontend_dist_path:
+        cand = _frontend_dist_path / "favicon.ico"
+        if cand.is_file():
+            return FileResponse(cand)
+        # also check assets/logo
+        cand2 = _frontend_dist_path / "assets"
+        # fallback to empty json if no file — prevents 404 spam
     return {}
+
 
 @app.get("/")
 async def root():
+    # If frontend is built, serve SPA at "/" — this is what fixes "frontend doesn't load at all"
+    # Previously this returned JSON and shadowed StaticFiles. Now we serve index.html.
+    if _frontend_index and _frontend_index.is_file():
+        return FileResponse(_frontend_index)
+    return {
+        "service": "Précis API",
+        "docs": "/docs",
+        "health": "/health",
+        "status": "/status",
+    }
+
+
+@app.get("/api")
+async def api_root():
+    """Explicit JSON api root (previous GET / JSON moved here for discoverability)."""
     return {
         "service": "Précis API",
         "docs": "/docs",
@@ -103,7 +141,7 @@ async def list_models():
             r.raise_for_status()
             payload = r.json() if r.content else {}
             installed = [m.get("name") for m in payload.get("models", []) if m.get("name")]
-            
+
             # Fetch currently running/loaded models
             running = []
             try:
@@ -114,12 +152,19 @@ async def list_models():
             except Exception:
                 pass
 
+            # Ollama is reachable — return actual installed list, even if empty.
+            # Do NOT fallback to AVAILABLE_MODELS when reachable; empty means "no models installed"
+            # so frontend can show "run ollama pull ..." instead of faking models that 404 on /api/generate.
             if installed:
                 default = DEFAULT_MODEL if DEFAULT_MODEL in installed else installed[0]
-                return {"default": default, "available": installed, "running": running}
+            else:
+                default = None
+            return {"default": default, "available": installed, "running": running}
     except Exception:
         pass
 
+    # Ollama not reachable — fallback to env-configured list so UI isn't blank,
+    # but frontend should treat this as "ollama down" (check /status ollama_reachable).
     return {"default": DEFAULT_MODEL, "available": AVAILABLE_MODELS, "running": []}
 
 
@@ -258,16 +303,14 @@ async def summarize_file(
 
 # ── Mount frontend LAST so /health, /models, /docs etc. are not shadowed ──
 # Starlette matches mounts in order — "/" mounted first would swallow /health.
-from pathlib import Path as _Path
-
-_frontend_candidates = [
-    _Path(__file__).resolve().parent.parent / "frontend" / "dist",
-    _Path(__file__).resolve().parent / "frontend" / "dist",
-    _Path.cwd() / "frontend" / "dist",
-]
-_frontend_dist = next((str(p) for p in _frontend_candidates if p.is_dir()), None)
+# Reuse _frontend_dist_path computed above (Path object) to avoid double detection.
+# NOTE: With html=True, StaticFiles will serve index.html for any 404 (SPA fallback)
+# so we don't need an extra catch-all route. The explicit GET "/" above ensures
+# "/" returns index.html even when mount is not yet evaluated.
+_frontend_dist = str(_frontend_dist_path) if _frontend_dist_path else None
 if _frontend_dist:
     try:
+        # Mount assets and SPA fallback. Must be last so API routes take precedence.
         app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="static")
     except Exception:
         pass

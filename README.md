@@ -78,7 +78,7 @@ cp .env.example .env
 > AVAILABLE_MODELS=phi4-mini:latest
 > PRECIS_API_KEY=replace-with-a-long-random-secret
 > VITE_API_KEY=replace-with-a-long-random-secret
-> PRECIS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5555
+> PRECIS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8000
 > VITE_API_BASE_URL=                            # empty = same origin (correct for Docker)
 > ```
 
@@ -87,11 +87,11 @@ Manually update `.env.example` to match the block above if your copy is older.
 ### 3. Run
 
 ```bash
-docker compose up --build
+docker compose up --watch
 ```
 
 - First build takes ~4-6 min (multi-stage: Node build + `conda env create -f environment.yml` for `precis` — cached after first build).
-- Opens: **http://localhost:5555** — single origin serves both API (`/docs`, `/health`) and the frontend.
+- Opens: **http://localhost:5173** (Vite HMR) + API at **http://localhost:8000** (`/docs`, `/health`). With `--watch`, edits to `backend/` and `frontend/` hot-reload automatically.
 - Compose healthchecks wait for Ollama (`/api/tags`) before starting the API (which runs as `conda run -n precis uvicorn`).
 
 #### Pull a model (inside Ollama container)
@@ -106,19 +106,22 @@ docker exec -it precis-ollama ollama pull qwen3:4b
 docker exec -it precis-ollama ollama list
 ```
 
-Then refresh http://localhost:5555 — the model selector populates automatically (`GET /models`).
+Then refresh http://localhost:5173 — the model selector populates automatically (`GET /models` proxied to `:8000`).
 
 #### Useful commands
 
 ```bash
-docker compose up --build -d   # detached
+docker compose up --watch -d   # detached with watch
 docker compose logs -f api     # tail API logs
 docker compose logs -f ollama
+docker compose logs -f frontend
 docker compose down            # stop
-docker compose down -v         # stop + wipe Ollama model cache (ollama_data volume)
+docker compose down -v         # stop + wipe Ollama model cache (only if using named volume)
 docker compose ps
-curl http://localhost:5555/health
-curl http://localhost:5555/status
+curl http://localhost:8000/health
+curl http://localhost:8000/status
+# prod without watch/HMR (static frontend at 8000):
+docker compose -f docker-compose.yml up --build
 ```
 
 #### Single-image run (without compose / without Ollama sidecar)
@@ -127,7 +130,7 @@ If you just want the API image and already run Ollama natively (`ollama serve` o
 
 ```bash
 docker build -t precis .
-docker run --rm -p 5555:5555 --env-file .env \
+docker run --rm -p 8000:8000 --env-file .env \
   -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
   precis
 # Windows/Mac: host.docker.internal resolves to host. Linux: add --add-host=host.docker.internal:host-gateway
@@ -135,7 +138,7 @@ docker run --rm -p 5555:5555 --env-file .env \
 
 #### Hugging Face Spaces
 
-`sdk: docker` with `EXPOSE 5555 7860` + `ENV PORT=5555` + `CMD sh -c "uvicorn ... --port ${PORT:-5555}"` means the same image works everywhere: locally `http://localhost:5555` (compose sets `PORT=5555`), on HF Spaces Hugging Face sets `PORT=7860` automatically and the container listens on `7860` with no extra config.
+`sdk: docker` with `EXPOSE 8000 7860` + `ENV PORT=8000` + `CMD sh -c "uvicorn ... --port ${PORT:-8000}"` means the same image works everywhere: locally `http://localhost:8000` (compose sets `PORT=8000`), on HF Spaces Hugging Face sets `PORT=7860` automatically and the container listens on `7860` with no extra config.
 
 ---
 
@@ -156,7 +159,7 @@ Use this if you want hot-reload for the frontend/backend separately. Docker rema
 cp .env.example .env
 # set PRECIS_API_KEY, VITE_API_KEY (same value), and for local:
 # OLLAMA_BASE_URL=http://127.0.0.1:11434
-# VITE_API_BASE_URL=http://localhost:5555   # or leave empty and rely on Vite proxy
+# VITE_API_BASE_URL=http://localhost:8000   # or leave empty and rely on Vite proxy
 ```
 
 ### 2. Run the Fine-Tuning (optional)
@@ -183,15 +186,15 @@ python -m scripts.test --model phi4-mini:latest
 conda env create -f environment.yml   # once
 conda activate precis
 pip install -r requirements.txt       # keep in sync if you edit requirements.txt
-uvicorn backend.app:app --reload --port 5555
-# or: cd backend && uvicorn app:app --reload --port 5555
+uvicorn backend.app:app --reload --port 8000
+# or: cd backend && uvicorn app:app --reload --port 8000
 
 # Without conda:
 # pip install -r requirements.txt
-# uvicorn backend.app:app --reload --port 5555
+# uvicorn backend.app:app --reload --port 8000
 ```
 
-Served at **`http://localhost:5555`** with interactive docs at `/docs`.
+Served at **`http://localhost:8000`** with interactive docs at `/docs`.
 
 ### 5. Run the Frontend
 
@@ -203,7 +206,7 @@ npm run dev
 
 Served at **`http://localhost:5173`**.
 
-`vite.config.js` proxies `/health`, `/status`, `/models`, `/summarize`, `/warmup`, `/unload` to `http://localhost:5555`, so you only need to visit `http://localhost:5173` — no manual `VITE_API_BASE_URL` required. For custom backend ports, set `VITE_API_BASE_URL` in `.env`.
+`vite.config.js` proxies `/health`, `/status`, `/models`, `/summarize`, `/warmup`, `/unload` to `http://localhost:8000` (via `.env` `API_BASE_URL`/`VITE_PROXY_TARGET`), so you only need to visit `http://localhost:5173` — no manual `VITE_API_BASE_URL` required. `docker compose up --watch` syncs edits automatically.
 
 ---
 

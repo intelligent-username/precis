@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import InlineResult from './components/InlineResult'
 import { useStreaming } from './hooks/useStreaming'
 import { API_BASE } from './config'
@@ -15,19 +15,26 @@ function App() {
   const [modelReady, setModelReady] = useState(null)
   const fileInputRef = useRef(null)
   const warmupAbortRef = useRef(null)
+  const warmupTimerRef = useRef(null)
 
   const ytStreaming = useStreaming()
   const textStreaming = useStreaming()
   const fileStreaming = useStreaming()
 
-  const streaming = { youtube: ytStreaming, transcript: textStreaming, file: fileStreaming }
+  // Memoize streaming map so `active` identity is stable unless tab changes
+  const streaming = useMemo(() => ({
+    youtube: ytStreaming,
+    transcript: textStreaming,
+    file: fileStreaming
+  }), [ytStreaming, textStreaming, fileStreaming])
   const active = streaming[activeTab]
 
   const [runningModels, setRunningModels] = useState([])
   const isMounted = useRef(true)
   const prevModelRef = useRef(null)
 
-  const fetchModels = async () => {
+  // Stable fetchModels — used in intervals and warmup, so must not recreate
+  const fetchModels = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/models`)
       if (!res.ok) return
@@ -40,29 +47,47 @@ function App() {
       const serverDefault = typeof data.default === 'string' ? data.default : ''
       setSelectedModel((prev) => prev || serverDefault || available[0] || '')
     } catch { /* non-fatal */ }
-  }
+  }, [])
 
+  // Fetch models on mount + every 30s (was 10s → laggy, 30s is enough)
+  // Also pause polling when tab hidden to save battery/CPU
   useEffect(() => {
     isMounted.current = true
     fetchModels()
-    const interval = setInterval(fetchModels, 10000)
+    let interval = null
+    const start = () => {
+      if (interval) clearInterval(interval)
+      interval = setInterval(() => {
+        if (document.visibilityState === 'visible') fetchModels()
+      }, 30000)
+    }
+    start()
+    const onVis = () => { if (document.visibilityState === 'visible') fetchModels() }
+    document.addEventListener('visibilitychange', onVis)
     return () => {
       isMounted.current = false
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVis)
     }
-  }, [])
+  }, [fetchModels])
 
+  // Warmup: debounced 400ms, single poll loop, proper cleanup
   useEffect(() => {
     if (!selectedModel) return
 
+    // Debounce: user rapidly switching models shouldn't spam /warmup + /unload
+    if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current)
     if (warmupAbortRef.current) warmupAbortRef.current.abort()
+
     const controller = new AbortController()
     warmupAbortRef.current = controller
     setModelReady(false)
 
     let pollTimer = null
+    let cancelled = false
+
     const poll = async () => {
-      if (controller.signal.aborted) return
+      if (cancelled || controller.signal.aborted) return
       try {
         const r = await fetch(
           `${API_BASE}/warmup/status?model=${encodeURIComponent(selectedModel)}`,
@@ -70,13 +95,14 @@ function App() {
         )
         if (r.ok) {
           const data = await r.json()
-          if (data.loaded) { setModelReady(true); return }
+          if (data.loaded) { if (!cancelled) setModelReady(true); return }
         }
-      } catch { /* ignore */ }
-      if (!controller.signal.aborted) pollTimer = setTimeout(poll, 2000)
+      } catch { /* ignore — will retry */ }
+      if (!cancelled && !controller.signal.aborted) pollTimer = setTimeout(poll, 2500)
     }
 
     const startSequence = async () => {
+      // Unload previous only if actually changed — and don't refetch models immediately (laggy)
       if (prevModelRef.current && prevModelRef.current !== selectedModel) {
         try {
           await fetch(`${API_BASE}/unload`, {
@@ -85,84 +111,105 @@ function App() {
             body: JSON.stringify({ model: prevModelRef.current }),
             signal: controller.signal,
           })
-          fetchModels()
+          // Debounce the follow-up model list refresh — don't block warmup on it
+          setTimeout(() => { if (!controller.signal.aborted) fetchModels() }, 800)
         } catch { /* ignore */ }
       }
       prevModelRef.current = selectedModel
 
       poll()
 
-      fetch(`${API_BASE}/warmup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selectedModel }),
-        signal: controller.signal,
-      }).then(() => setModelReady(true)).catch(() => {})
+      try {
+        const r = await fetch(`${API_BASE}/warmup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: selectedModel }),
+          signal: controller.signal,
+        })
+        // warmup endpoint is fire-and-forget-ish; if ok, mark ready
+        if (r.ok && !cancelled && !controller.signal.aborted) setModelReady(true)
+      } catch { /* abort or network — poll will handle */ }
     }
 
-    startSequence()
+    // Debounce the whole sequence 400ms
+    warmupTimerRef.current = setTimeout(startSequence, 400)
 
-    return () => { controller.abort(); clearTimeout(pollTimer) }
-  }, [selectedModel])
+    return () => {
+      cancelled = true
+      controller.abort()
+      clearTimeout(pollTimer)
+      clearTimeout(warmupTimerRef.current)
+    }
+  }, [selectedModel, fetchModels])
 
-  const handleSubmit = () =>
+  // Stable handleSubmit — fixes "frontend stops after script fetching" due to stale closure
+  // and fixes keydown listener thrash (was recreating every render)
+  const handleSubmit = useCallback(() =>
     active.submit(activeTab, {
       youtubeUrl, transcript, selectedFile,
       selectedModel: selectedModel || undefined,
-    })
+    }), [active, activeTab, youtubeUrl, transcript, selectedFile, selectedModel])
 
-  const handleFileDrop = (e) => {
+  const handleFileDrop = useCallback((e) => {
     e.preventDefault()
     e.stopPropagation()
     const file = e.dataTransfer?.files[0] || e.target.files?.[0]
     if (file && file.name.endsWith('.txt')) setSelectedFile(file)
     else if (file) alert('Only .txt files are supported')
-  }
+  }, [])
 
-  const formatFileSize = (bytes) => {
+  const formatFileSize = useCallback((bytes) => {
     if (bytes < 1024) return bytes + ' bytes'
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-  }
+  }, [])
+
+  // Keep refs for keydown so listener doesn't need to re-bind every render
+  const activeRef = useRef(active)
+  const handleSubmitRef = useRef(handleSubmit)
+  const youtubeUrlRef = useRef(youtubeUrl)
+  useEffect(() => { activeRef.current = active }, [active])
+  useEffect(() => { handleSubmitRef.current = handleSubmit }, [handleSubmit])
+  useEffect(() => { youtubeUrlRef.current = youtubeUrl }, [youtubeUrl])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      const a = activeRef.current
       // Ctrl + Enter to generate
       if (e.ctrlKey && e.key === 'Enter') {
-        if (!active.loading) {
+        if (!a.loading) {
           e.preventDefault()
-          handleSubmit()
+          handleSubmitRef.current()
         }
       }
       // Ctrl + Alt + C to copy YouTube URL
       if (e.ctrlKey && e.altKey && (e.key === 'c' || e.key === 'C')) {
         e.preventDefault()
-        if (youtubeUrl) {
-          navigator.clipboard.writeText(youtubeUrl).catch(() => {})
+        if (youtubeUrlRef.current) {
+          navigator.clipboard.writeText(youtubeUrlRef.current).catch(() => {})
         }
         return
       }
-
       // Ctrl + C to cancel (only when loading, and no text selected)
       if (e.ctrlKey && !e.shiftKey && (e.key === 'c' || e.key === 'C')) {
-        if (active.loading) {
+        if (a.loading) {
           const selection = window.getSelection()?.toString()
           if (!selection) {
             e.preventDefault()
-            active.cancel()
+            a.cancel()
           }
         }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [active, handleSubmit])
+  }, []) // stable — uses refs
 
-  const TABS = [
+  const TABS = useMemo(() => [
     { key: 'youtube',     label: 'YouTube' },
     { key: 'transcript',  label: 'Text' },
     { key: 'file',        label: 'File' },
-  ]
+  ], [])
 
   return (
     <>

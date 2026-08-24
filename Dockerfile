@@ -3,10 +3,13 @@
 # ── Stage 1: Build frontend ──────────────────────────────────────────────
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
+# Leverage Docker cache: only reinstall when deps change
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci || npm install
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --no-fund || npm install --no-audit --no-fund
 COPY frontend ./
 # Build-time env: API_BASE empty = same origin (FastAPI serves frontend)
+# These are baked at `npm run build` time — BE CAREFUL with secrets.
+# VITE_API_KEY is intentionally baked so the browser can auth without extra config.
 ARG VITE_API_BASE_URL=""
 ARG PRECIS_API_KEY=""
 ARG VITE_API_KEY=""
@@ -16,6 +19,9 @@ ENV VITE_API_KEY=${VITE_API_KEY}
 RUN npm run build
 
 # ── Stage 2: Python runtime via conda env `precis` ──────────────────────
+# NOTE: This stage is heavy (~2GB) because `environment.yml` includes torch/transformers
+# for training. For production API only, you could use `python:3.11-slim` + `pip install -r requirements.txt`
+# with a minimal runtime requirements file. We keep conda for parity with local dev.
 FROM continuumio/miniconda3:latest
 
 ENV PYTHONUNBUFFERED=1 \
@@ -33,7 +39,8 @@ WORKDIR /app
 # Create the `precis` env exactly as you do locally:
 #   conda env create -f environment.yml  (or `conda create -n precis python=3.11 && pip install -r requirements.txt`)
 COPY environment.yml requirements.txt ./
-RUN conda env create -f environment.yml && conda clean -afy
+# Use BuildKit cache for conda pkgs to reduce 4-6min rebuilds
+RUN --mount=type=cache,target=/opt/conda/pkgs conda env create -f environment.yml && conda clean -afy
 
 # Make `precis` the default Python for all subsequent layers + runtime
 ENV CONDA_DEFAULT_ENV=precis

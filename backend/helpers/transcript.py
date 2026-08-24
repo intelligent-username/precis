@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import urllib.parse
 from typing import Optional
 
 import httpx
@@ -41,8 +42,35 @@ _LANG_PREFS = ["en", "en-US", "en-GB"]
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _strip_timestamp(url: str) -> str:
+    """Strip t/start/time_continue from YouTube URLs so transcript fetch ignores timestamp."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        # query e.g. ?v=abc&t=120s&start=30
+        q = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        for k in ("t", "start", "time_continue"):
+            q.pop(k, None)
+        # fragment e.g. #t=120s
+        frag = parsed.fragment
+        if frag:
+            # handle #t=1m30s or #t=90
+            if frag.startswith("t="):
+                frag = ""
+            else:
+                fq = urllib.parse.parse_qs(frag, keep_blank_values=True)
+                for k in ("t", "start", "time_continue"):
+                    fq.pop(k, None)
+                frag = urllib.parse.urlencode(fq, doseq=True)
+        new_query = urllib.parse.urlencode(q, doseq=True)
+        return urllib.parse.urlunparse(parsed._replace(query=new_query, fragment=frag))
+    except Exception:
+        return url
+
+
 def _extract_video_id(url: str) -> str:
     """Return the 11-char video ID from a YouTube URL or bare ID."""
+    # Strip timestamp first (t=120s, t=1m30s, &start=, etc.) — transcript is always full
+    url = _strip_timestamp(url)
     # Accept a bare 11-char ID directly
     if re.fullmatch(r"[A-Za-z0-9_-]{11}", url):
         return url

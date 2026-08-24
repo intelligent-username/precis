@@ -9,16 +9,40 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    // `npm run dev` on host -> localhost:5555, `docker compose up` frontend -> api:5555
+    // Polling is needed for Docker bind mounts on Windows (virtiofs/gRPC-FUSE),
+    // but 300ms is too aggressive and causes constant CPU + HMR thrash.
+    // 1000ms is enough for dev; overridden via CHOKIDAR_INTERVAL env if needed.
+    watch: {
+      usePolling: Boolean(process.env.CHOKIDAR_USEPOLLING || process.env.DOCKER),
+      interval: Number(process.env.CHOKIDAR_INTERVAL) || 1000,
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+    },
+    // Proxy fixes "frontend stops after script fetching" streaming bug:
+    // Vite's http-proxy buffers responses by default, which breaks NDJSON streaming.
+    // We use `configure` to disable buffering and ensure chunked transfer passes through.
     proxy: (() => {
-      const target = process.env.VITE_PROXY_TARGET || (process.env.DOCKER ? 'http://api:5555' : 'http://localhost:5555')
+      const target = process.env.VITE_PROXY_TARGET || process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || 'http://localhost:8000'
+      const streamingProxy = {
+        target,
+        changeOrigin: true,
+        // Don't buffer streaming responses — critical for /summarize/* NDJSON
+        selfHandleResponse: false,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            // Disable proxy buffering for streaming endpoints
+            proxyReq.setHeader('X-Accel-Buffering', 'no')
+            proxyReq.setHeader('Cache-Control', 'no-cache')
+          })
+        },
+      }
       return {
         '/health': target,
         '/status': target,
         '/models': target,
         '/warmup': target,
         '/unload': target,
-        '/summarize': target,
+        // Streaming endpoints need special handling to avoid lag/buffering
+        '/summarize': streamingProxy,
         '/docs': target,
         '/openapi.json': target,
       }
